@@ -1,7 +1,7 @@
 # websocket
 
-[![Build Status](https://img.shields.io/travis/amphp/template/master.svg?style=flat-square)](https://travis-ci.org/amphp/template)
-[![CoverageStatus](https://img.shields.io/coveralls/amphp/template/master.svg?style=flat-square)](https://coveralls.io/github/amphp/template?branch=master)
+[![Build Status](https://img.shields.io/travis/amphp/websocket/master.svg?style=flat-square)](https://travis-ci.org/amphp/websocket)
+[![CoverageStatus](https://img.shields.io/coveralls/amphp/websocket/master.svg?style=flat-square)](https://coveralls.io/github/amphp/websocket?branch=master)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
 
 
@@ -14,5 +14,5 @@
 **Installation**
 
 ```bash
-$ composer require amphp/template
+$ composer require amphp/websocket
 ```
