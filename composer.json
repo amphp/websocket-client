@@ -1,0 +1,30 @@
+{
+  "name": "amphp/websocket",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Bob Weinand",
+      "email": "bobwei9@hotmail.com"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/amphp/websocket/issues"
+  },
+  "require": {
+    "amphp/amp": "^1",
+    "amphp/socket": "^0.9"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "~4.4.0",
+    "fabpot/php-cs-fixer": "~1.9"
+  },
+  "autoload": {
+    "psr-4": {
+      "Amp\\Websocket\\": "lib/"
+    },
+    "classmap": [
+      {"Amp\\Websocket": "Websocket.php"}
+    ],
+    "files": ["lib/functions.php"]
+  }
+}
