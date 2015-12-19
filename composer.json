@@ -10,6 +10,15 @@
   "support": {
     "issues": "https://github.com/amphp/websocket/issues"
   },
+  "keywords": [
+    "async",
+    "non-blocking",
+    "websocket",
+    "client",
+    "http",
+    "amp",
+    "amphp"
+  ],
   "require": {
     "php": ">=5.5",
     "amphp/amp": "^1",
