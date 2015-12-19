@@ -37,7 +37,7 @@ class Handshake {
         }
     }
 
-    public function setHeader(string $field, string $value) {
+    public function setHeader($field, $value) {
         $this->headers[$field] = $value;
         return $this;
     }
