@@ -11,6 +11,7 @@
     "issues": "https://github.com/amphp/websocket/issues"
   },
   "require": {
+    "php": ">=5.5",
     "amphp/amp": "^1",
     "amphp/socket": "^0.9"
   },
