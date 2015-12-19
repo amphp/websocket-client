@@ -73,18 +73,15 @@ class Handshake {
                     $data = substr($data, $bytes);
                     return;
                 }
-                $size = 8192;
-                \Amp\onReadable($socket, function($reader, $socket) use ($deferred, &$size) {
-                    /* make attention to not read too much data */
-                    $data = stream_socket_recvfrom($socket, $size, STREAM_PEEK);
-                    if (false === $pos = strpos($data, "\r\n\r\n")) {
-                        if (\strlen($data) == $size) {
-                            $size *= 2; // unbounded??
-                        }
+                $responseBuffer = '';
+                \Amp\onReadable($socket, function($reader, $socket) use ($deferred, &$responseBuffer) {
+                    $thisRead = stream_get_line($socket, 8192, "\r\n");
+                    $responseBuffer .= $thisRead . "\r\n";
+                    if ($thisRead != '') {
                         return;
                     }
                     \Amp\cancel($reader);
-                    $deferred->succeed($this->parseResponse(fread($socket, $pos + 4)));
+                    $deferred->succeed($this->parseResponse($responseBuffer));
                 });
             } else {
                 $deferred->succeed(null);
