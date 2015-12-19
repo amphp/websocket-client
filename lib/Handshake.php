@@ -73,15 +73,16 @@ class Handshake {
                     $data = substr($data, $bytes);
                     return;
                 }
-                $responseBuffer = '';
-                \Amp\onReadable($socket, function($reader, $socket) use ($deferred, &$responseBuffer) {
-                    $thisRead = stream_get_line($socket, 8192, "\r\n");
-                    $responseBuffer .= $thisRead . "\r\n";
-                    if ($thisRead != '') {
-                        return;
+                $data = '';
+                \Amp\onReadable($socket, function($reader, $socket) use ($deferred, &$data) {
+                    $data .= $bytes = fgets($socket);
+                    if ($bytes == '' || \strlen($bytes) > 32768) {
+                        \Amp\cancel($reader);
+                        $deferred->succeed(null);
+                    } elseif (substr($data, -4) == "\r\n\r\n") {
+                        \Amp\cancel($reader);
+                        $deferred->succeed($this->parseResponse($data));
                     }
-                    \Amp\cancel($reader);
-                    $deferred->succeed($this->parseResponse($responseBuffer));
                 });
             } else {
                 $deferred->succeed(null);
