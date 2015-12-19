@@ -1,5 +1,6 @@
 {
   "name": "amphp/websocket",
+  "description": "An async websocket client built on the amp concurrency framework",
   "license": "MIT",
   "authors": [
     {
