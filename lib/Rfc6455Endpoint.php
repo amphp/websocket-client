@@ -171,7 +171,7 @@ class Rfc6455Endpoint implements Endpoint {
         switch ($opcode) {
             case self::OP_CLOSE:
                 if ($this->closedAt) {
-                    unset($this->closeTimeout);
+                    $this->closeTimeout = null;
                     $this->unloadClient();
                 } else {
                     if (\strlen($data) < 2) {
@@ -264,7 +264,7 @@ class Rfc6455Endpoint implements Endpoint {
                 $reason = "Client closed underlying TCP connection";
                 \Amp\resolve($this->tryAppOnClose($code, $reason));
             } else {
-                unset($this->closeTimeout);
+                $this->closeTimeout = null;
             }
 
             $this->unloadClient();
@@ -282,7 +282,7 @@ class Rfc6455Endpoint implements Endpoint {
             // $this->closedAt is true, it might be the case that read watcher
             // is already cancelled and we need to ensure that our writing promise
             // is fulfilled in unloadClient() with a failure
-            unset($this->closeTimeout);
+            $this->closeTimeout = null;
             $this->unloadClient();
         } else {
             $this->framesSent++;
@@ -427,7 +427,7 @@ class Rfc6455Endpoint implements Endpoint {
 
         if ($this->closeTimeout < $now && $this->closedAt) {
             $this->unloadClient();
-            unset($this->closeTimeout);
+            $this->closeTimeout = null;
         }
     }
 
