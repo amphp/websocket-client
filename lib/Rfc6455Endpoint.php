@@ -114,10 +114,12 @@ class Rfc6455Endpoint implements Endpoint {
     }
 
     private function tryAppOnClose($code, $reason) {
-        $onCloseResult = $this->application->onClose($code, $reason);
-        if ($onCloseResult instanceof \Generator) {
-            yield \Amp\resolve($onCloseResult);
-        }
+        try {
+            $onCloseResult = $this->application->onClose($code, $reason);
+            if ($onCloseResult instanceof \Generator) {
+                yield \Amp\resolve($onCloseResult);
+            }
+        } catch (ClientException $e) {}
     }
 
     private function unloadClient() {
@@ -223,10 +225,12 @@ class Rfc6455Endpoint implements Endpoint {
     }
 
     private function tryAppOnData(Message $msg) {
-        $gen = $this->application->onData($msg);
-        if ($gen instanceof \Generator) {
-            yield \Amp\resolve($gen);
-        }
+        try {
+            $gen = $this->application->onData($msg);
+            if ($gen instanceof \Generator) {
+                yield \Amp\resolve($gen);
+            }
+        } catch (ClientException $e) {}
     }
 
     private function onParsedError(array $parseResult) {
