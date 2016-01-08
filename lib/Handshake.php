@@ -20,11 +20,15 @@ class Handshake {
      */
     public function __construct($url, $options = []) {
         $url = parse_url($url);
+        $this->crypto = $url["scheme"] == "wss";
         $this->target = $url["host"];
         if (isset($url["port"])) {
             $this->target .= ":{$url['port']}";
+        } elseif ($this->crypto) {
+            $this->target .= ":443";
+        } else {
+            $this->target .= ":80";
         }
-        $this->crypto = $url["scheme"] == "wss";
         $this->headers["host"] = $this->target;
         $this->options = $options;
         if (isset($url["path"])) {
