@@ -82,7 +82,7 @@ class Rfc6455Endpoint implements Endpoint {
         $this->socket = $socket;
         $this->parser = $this->parser([$this, "onParse"]);
         $this->writeWatcher = \Amp\onWritable($socket, [$this, "onWritable"], $options = ["enable" => false]);
-        \Amp\resolve($this->tryAppOnOpen($headers));
+        \Amp\resolve($this->tryAppOnOpen($headers))->when(function($e){ if ($e) throw $e; });
     }
 
     private function tryAppOnOpen($headers) {
@@ -212,7 +212,7 @@ class Rfc6455Endpoint implements Endpoint {
         if (!$this->msgPromisor) {
             $this->msgPromisor = new Deferred;
             $msg = new Message($this->msgPromisor->promise());
-            \Amp\resolve($this->tryAppOnData($msg));
+            \Amp\resolve($this->tryAppOnData($msg))->when(function($e) { if ($e) throw $e; });
         }
 
         $this->msgPromisor->update($data);
@@ -249,7 +249,7 @@ class Rfc6455Endpoint implements Endpoint {
             }
 
             if (!$this->closedAt) {
-                $this->doClose($code, $msg);
+                $this->doClose($code, $msg)->when(function($e){ if ($e) throw $e; });
             }
         }
     }
@@ -266,7 +266,7 @@ class Rfc6455Endpoint implements Endpoint {
                 $this->closedAt = $this->now;
                 $code = Code::ABNORMAL_CLOSE;
                 $reason = "Client closed underlying TCP connection";
-                \Amp\resolve($this->tryAppOnClose($code, $reason));
+                \Amp\resolve($this->tryAppOnClose($code, $reason))->when(function($e){ if ($e) throw $e; });
             } else {
                 $this->closeTimeout = null;
             }
@@ -406,7 +406,7 @@ class Rfc6455Endpoint implements Endpoint {
     }
 
     public function close($code = Code::NORMAL_CLOSE, $reason = "") {
-        $this->doClose($code, $reason);
+        $this->doClose($code, $reason)->when(function($e){ if ($e) throw $e; });
     }
 
     public function getInfo() {
