@@ -20,22 +20,21 @@
     "amp",
     "amphp"
   ],
+  "minimum-stability": "dev",
   "require": {
-    "php": ">=5.5",
-    "amphp/amp": "^1",
-    "amphp/socket": "^0.9"
+    "php": ">=7.0",
+    "amphp/amp": "dev-master as 2.0",
+    "amphp/socket": "dev-amp_v2"
   },
   "require-dev": {
-    "phpunit/phpunit": "~4.4.0",
+    "amphp/loop": "dev-master",
+    "phpunit/phpunit": "^5",
     "fabpot/php-cs-fixer": "~1.9"
   },
   "autoload": {
     "psr-4": {
       "Amp\\Websocket\\": "lib/"
     },
-    "classmap": [
-      {"Amp\\Websocket": "Websocket.php"}
-    ],
     "files": ["lib/functions.php"]
   }
 }

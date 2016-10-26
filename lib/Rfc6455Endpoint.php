@@ -3,24 +3,18 @@
 namespace Amp\Websocket;
 
 use Amp\Deferred;
+use Amp\Postponed;
 use Amp\Failure;
-use Amp\Websocket;
 
-class Rfc6455Endpoint implements Endpoint {
-    private $application;
-    private $proxy;
-    private $closeTimeout;
-    private $timeoutWatcher;
-    private $now;
-
-    private $autoFrameSize = 32768;
-    private $maxFrameSize = 2097152;
-    private $maxMsgSize = 10485760;
-    private $heartbeatPeriod = 10;
-    private $closePeriod = 3;
-    private $validateUtf8 = false;
-    private $textOnly = false;
-    private $queuedPingLimit = 3;
+class Rfc6455Endpoint {
+    public $autoFrameSize = 32768;
+    public $maxFrameSize = 2097152;
+    public $maxMsgSize = 10485760;
+    public $heartbeatPeriod = 10;
+    public $closePeriod = 3;
+    public $validateUtf8 = false;
+    public $textOnly = false;
+    public $queuedPingLimit = 3;
     // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
 
     private $socket;
@@ -28,10 +22,9 @@ class Rfc6455Endpoint implements Endpoint {
     private $builder = [];
     private $readWatcher;
     private $writeWatcher;
-    private $msgPromisor;
 
-    private $pingCount = 0;
-    private $pongCount = 0;
+    public $pingCount = 0;
+    public $pongCount = 0;
 
     private $writeBuffer = '';
     private $writeDeferred;
@@ -40,21 +33,30 @@ class Rfc6455Endpoint implements Endpoint {
     private $writeControlQueue = [];
     private $writeDeferredControlQueue = [];
 
+    public $readMessage;
+    public $readQueue = [];
+    public $readPostponeds = [];
+    public $msgPostponed;
+
+    private $closeTimeout;
+    private $timeoutWatcher;
+
     // getInfo() properties
-    private $connectedAt;
-    private $closedAt = 0;
-    private $lastReadAt = 0;
-    private $lastSentAt = 0;
-    private $lastDataReadAt = 0;
-    private $lastDataSentAt = 0;
-    private $bytesRead = 0;
-    private $bytesSent = 0;
-    private $framesRead = 0;
-    private $framesSent = 0;
-    private $messagesRead = 0;
-    private $messagesSent = 0;
-
-
+    public $connectedAt;
+    public $closedAt = 0;
+    public $lastReadAt = 0;
+    public $lastSentAt = 0;
+    public $lastDataReadAt = 0;
+    public $lastDataSentAt = 0;
+    public $bytesRead = 0;
+    public $bytesSent = 0;
+    public $framesRead = 0;
+    public $framesSent = 0;
+    public $messagesRead = 0;
+    public $messagesSent = 0;
+    public $closeCode;
+    public $closeReason;
+    
     /* Frame control bits */
     const FIN      = 0b1;
     const RSV_NONE = 0b000;
@@ -65,64 +67,45 @@ class Rfc6455Endpoint implements Endpoint {
     const OP_PING  = 0x09;
     const OP_PONG  = 0x0A;
 
-    const CONTROL = 1;
-    const DATA = 2;
-    const ERROR = 3;
+    const CONTROL = -1;
+    const ERROR = -2;
 
-    public function __construct($socket, Websocket $application, array $headers = []) {
+    public function __construct($socket, array $headers) {
         if (!$headers) {
-            throw new ClientException;
+            throw new ServerException;
         }
-        $this->application = $application;
-        $this->now = time();
-        $this->proxy = new Rfc6455EndpointProxy($this);
-        $f = (new \ReflectionClass($this))->getMethod("timeout")->getClosure($this);
-        $this->timeoutWatcher = \Amp\repeat($f, 1000);
-        $this->connectedAt = $this->now;
+        $this->timeoutWatcher = \Amp\repeat(1000, [$this, "timeout"]);
+        $this->connectedAt = \time();
         $this->socket = $socket;
         $this->parser = $this->parser([$this, "onParse"]);
-        $this->writeWatcher = \Amp\onWritable($socket, [$this, "onWritable"], $options = ["enable" => false]);
-        \Amp\resolve($this->tryAppOnOpen($headers))->when(function($e){ if ($e) throw $e; });
-    }
-
-    private function tryAppOnOpen($headers) {
-        $gen = $this->application->onOpen($this->proxy, $headers);
-        if ($gen instanceof \Generator) {
-            yield \Amp\resolve($gen);
-        }
+        $this->writeWatcher = \Amp\onWritable($socket, [$this, "onWritable"]);
+        \Amp\disable($this->writeWatcher);
         $this->readWatcher = \Amp\onReadable($this->socket, [$this, "onReadable"]);
     }
 
-    private function doClose($code, $reason) {
+    public function close($code, $reason) {
         // Only proceed if we haven't already begun the close handshake elsewhere
         if ($this->closedAt) {
             return;
         }
 
-        $this->closeTimeout = $this->now + $this->closePeriod;
-        $promise = $this->sendCloseFrame($code, $reason);
-        return \Amp\pipe(\Amp\resolve($this->tryAppOnClose($code, $reason)), function() use ($promise) {
-            return $promise;
-        });
+        $this->closeTimeout = \time() + $this->closePeriod;
+        $this->closeCode = $code;
+        $this->closeReason = $reason;
+        $this->sendCloseFrame($code, $reason);
+        if ($this->msgPostponed) {
+            $this->msgPostponed->fail(new ServerException);
+        }
         // Don't unload the client here, it will be unloaded upon timeout
     }
 
     private function sendCloseFrame($code, $msg) {
         $promise = $this->compile(pack('n', $code) . $msg, self::OP_CLOSE);
-        $this->closedAt = $this->now;
+        $this->closedAt = \time();
         return $promise;
     }
 
-    private function tryAppOnClose($code, $reason) {
-        try {
-            $onCloseResult = $this->application->onClose($code, $reason);
-            if ($onCloseResult instanceof \Generator) {
-                yield \Amp\resolve($onCloseResult);
-            }
-        } catch (ClientException $e) {}
-    }
-
-    private function unloadClient() {
+    private function unloadServer() {
         $this->parser = null;
         if ($this->readWatcher) {
             \Amp\cancel($this->readWatcher);
@@ -132,27 +115,33 @@ class Rfc6455Endpoint implements Endpoint {
         }
 
         // fail not yet terminated message streams; they *must not* be failed before client is removed
-        if ($this->msgPromisor) {
-            $this->msgPromisor->fail(new ClientException);
+        if ($this->msgPostponed) {
+            $this->msgPostponed->fail(new ServerException);
+            foreach ($this->readPostponeds as list($postponed)) {
+                $postponed->fail(new ServerException);
+            }
         }
 
         if ($this->writeBuffer != "") {
-            $this->writeDeferred->fail(new ClientException);
+            $this->writeDeferred->fail(new ServerException);
         }
         foreach ([$this->writeDeferredDataQueue, $this->writeDeferredControlQueue] as $deferreds) {
             foreach ($deferreds as $deferred) {
-                $deferred->fail(new ClientException);
+                $deferred->fail(new ServerException);
             }
         }
     }
 
-    public function onParse(array $parseResult) {
+    private function onParse(array $parseResult) {
         switch (array_shift($parseResult)) {
             case self::CONTROL:
                 $this->onParsedControlFrame($parseResult);
                 break;
-            case self::DATA:
-                $this->onParsedData($parseResult);
+            case self::OP_TEXT:
+                $this->onParsedData($parseResult, false);
+                break;
+            case self::OP_BIN:
+                $this->onParsedData($parseResult, true);
                 break;
             case self::ERROR:
                 $this->onParsedError($parseResult);
@@ -174,7 +163,7 @@ class Rfc6455Endpoint implements Endpoint {
             case self::OP_CLOSE:
                 if ($this->closedAt) {
                     $this->closeTimeout = null;
-                    $this->unloadClient();
+                    $this->unloadServer();
                 } else {
                     if (\strlen($data) < 2) {
                         return; // invalid close reason
@@ -185,7 +174,7 @@ class Rfc6455Endpoint implements Endpoint {
                     @stream_socket_shutdown($this->socket, STREAM_SHUT_RD);
                     \Amp\cancel($this->readWatcher);
                     $this->readWatcher = null;
-                    $this->doClose($code, $reason);
+                    $this->close($code, $reason);
                 }
                 break;
 
@@ -200,37 +189,34 @@ class Rfc6455Endpoint implements Endpoint {
         }
     }
 
-    private function onParsedData(array $parseResult) {
+    private function onParsedData(array $parseResult, $binary) {
         if ($this->closedAt) {
             return;
         }
 
-        $this->lastDataReadAt = $this->now;
+        $this->lastDataReadAt = \time();
 
         list($data, $terminated) = $parseResult;
 
-        if (!$this->msgPromisor) {
-            $this->msgPromisor = new Deferred;
-            $msg = new Message($this->msgPromisor->promise());
-            \Amp\resolve($this->tryAppOnData($msg))->when(function($e) { if ($e) throw $e; });
+        if (!$this->msgPostponed) {
+            if ($this->readPostponeds) {
+                list($this->msgPostponed, $msg) = \reset($this->readPostponeds);
+                $msg->setBinary($binary);
+                unset($this->readPostponeds[\key($this->readPostponeds)]);
+            } else {
+                $this->msgPostponed = new Postponed;
+                $msg = new Message($this->msgPostponed->getObservable(), $binary);
+                $this->readQueue[] = $msg;
+            }
         }
 
-        $this->msgPromisor->update($data);
+        $this->msgPostponed->emit($data);
         if ($terminated) {
-            $this->msgPromisor->succeed();
-            $this->msgPromisor = null;
+            $this->msgPostponed->resolve();
+            $this->msgPostponed = null;
         }
 
         $this->messagesRead += $terminated;
-    }
-
-    private function tryAppOnData(Message $msg) {
-        try {
-            $gen = $this->application->onData($msg);
-            if ($gen instanceof \Generator) {
-                yield \Amp\resolve($gen);
-            }
-        } catch (ClientException $e) {}
     }
 
     private function onParsedError(array $parseResult) {
@@ -249,29 +235,28 @@ class Rfc6455Endpoint implements Endpoint {
             }
 
             if (!$this->closedAt) {
-                $this->doClose($code, $msg)->when(function($e){ if ($e) throw $e; });
+                $this->close($code, $msg);
             }
         }
     }
 
     public function onReadable($watcherId, $socket) {
-        $data = @fread($socket, 8192);
+        $data = @\fread($socket, 8192);
 
         if ($data != "") {
-            $this->lastReadAt = $this->now;
+            $this->lastReadAt = \time();
             $this->bytesRead += \strlen($data);
             $this->framesRead += $this->parser->send($data);
         } elseif (!is_resource($socket) || @feof($socket)) {
             if (!$this->closedAt) {
-                $this->closedAt = $this->now;
-                $code = Code::ABNORMAL_CLOSE;
-                $reason = "Client closed underlying TCP connection";
-                \Amp\resolve($this->tryAppOnClose($code, $reason))->when(function($e){ if ($e) throw $e; });
+                $this->closedAt = \time();
+                $this->closeCode = Code::ABNORMAL_CLOSE;
+                $this->closeReason = "Client closed underlying TCP connection";
             } else {
                 $this->closeTimeout = null;
             }
 
-            $this->unloadClient();
+            $this->unloadServer();
         }
     }
 
@@ -285,15 +270,15 @@ class Rfc6455Endpoint implements Endpoint {
             // usually read watcher cares about aborted TCP connections, but when
             // $this->closedAt is true, it might be the case that read watcher
             // is already cancelled and we need to ensure that our writing promise
-            // is fulfilled in unloadClient() with a failure
+            // is fulfilled in unloadServer() with a failure
             $this->closeTimeout = null;
-            $this->unloadClient();
+            $this->unloadServer();
         } else {
             $this->framesSent++;
-            $this->writeDeferred->succeed();
+            $this->writeDeferred->resolve();
             if ($this->writeControlQueue) {
                 $this->writeBuffer = array_shift($this->writeControlQueue);
-                $this->lastSentAt = $this->now;
+                $this->lastSentAt = \time();
                 $this->writeDeferred = array_shift($this->writeDeferredControlQueue);
             } elseif ($this->closedAt) {
                 @stream_socket_shutdown($socket, STREAM_SHUT_WR);
@@ -302,8 +287,8 @@ class Rfc6455Endpoint implements Endpoint {
                 $this->writeBuffer = "";
             } elseif ($this->writeDataQueue) {
                 $this->writeBuffer = array_shift($this->writeDataQueue);
-                $this->lastDataSentAt = $this->now;
-                $this->lastSentAt = $this->now;
+                $this->lastDataSentAt = \time();
+                $this->lastSentAt = \time();
                 $this->writeDeferred = array_shift($this->writeDeferredDataQueue);
             } else {
                 $this->writeBuffer = "";
@@ -327,7 +312,7 @@ class Rfc6455Endpoint implements Endpoint {
 
     private function write($frameInfo) {
         if ($this->closedAt) {
-            return new Failure(new ClientException);
+            return new Failure(new ServerException);
         }
 
         $msg = $frameInfo["msg"];
@@ -362,7 +347,7 @@ class Rfc6455Endpoint implements Endpoint {
             $deferred = $this->writeDeferred = new Deferred;
         }
 
-        return $deferred->promise();
+        return $deferred->getAwaitable();
     }
 
     // just a dummy builder ... no need to really use it
@@ -401,36 +386,11 @@ class Rfc6455Endpoint implements Endpoint {
         return $this->compile($data, $opcode);
     }
 
-    public function sendBinary($data) {
-        return $this->send($data, true);
-    }
-
-    public function close($code = Code::NORMAL_CLOSE, $reason = "") {
-        $this->doClose($code, $reason)->when(function($e){ if ($e) throw $e; });
-    }
-
-    public function getInfo() {
-        return [
-            'bytes_read'    => $this->bytesRead,
-            'bytes_sent'    => $this->bytesSent,
-            'frames_read'   => $this->framesRead,
-            'frames_sent'   => $this->framesSent,
-            'messages_read' => $this->messagesRead,
-            'messages_sent' => $this->messagesSent,
-            'connected_at'  => $this->connectedAt,
-            'closed_at'     => $this->closedAt,
-            'last_read_at'  => $this->lastReadAt,
-            'last_sent_at'  => $this->lastSentAt,
-            'last_data_read_at'  => $this->lastDataReadAt,
-            'last_data_sent_at'  => $this->lastDataSentAt,
-        ];
-    }
-
-    private function timeout() {
-        $this->now = $now = time();
+    public function timeout() {
+        $now = \time();
 
         if ($this->closeTimeout < $now && $this->closedAt) {
-            $this->unloadClient();
+            $this->unloadServer();
             $this->closeTimeout = null;
         }
     }
@@ -481,8 +441,11 @@ class Rfc6455Endpoint implements Endpoint {
             $frameLength = $secondByte & 0b01111111;
 
             $isControlFrame = $opcode >= 0x08;
-            if ($validateUtf8 && $opcode !== self::OP_CONT && !$isControlFrame) {
-                $doUtf8Validation = $opcode === self::OP_TEXT;
+            if ($opcode !== self::OP_CONT && !$isControlFrame) {
+                $dataOpcode = $opcode;
+                if ($validateUtf8) {
+                    $doUtf8Validation = $opcode === self::OP_TEXT;
+                }
             }
 
             if ($frameLength === 0x7E) {
@@ -622,10 +585,10 @@ class Rfc6455Endpoint implements Endpoint {
                             break;
                         }
 
-                        $emitCallback([self::DATA, $payloadReference, false]);
+                        $emitCallback([$dataOpcode, $payloadReference, false]);
                         $payloadReference = $i > 0 ? substr($string, -$i) : '';
                     } else {
-                        $emitCallback([self::DATA, $payloadReference, false]);
+                        $emitCallback([$dataOpcode, $payloadReference, false]);
                         $payloadReference = '';
                     }
 
@@ -674,7 +637,7 @@ class Rfc6455Endpoint implements Endpoint {
                         }
                     }
 
-                    $emit = [self::DATA, $payloadReference, $fin];
+                    $emit = [$dataOpcode, $payloadReference, $fin];
 
                     if ($fin) {
                         $dataMsgBytesRecd = 0;

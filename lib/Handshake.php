@@ -21,15 +21,18 @@ class Handshake {
     public function __construct($url, $options = []) {
         $url = parse_url($url);
         $this->crypto = $url["scheme"] == "wss";
-        $this->target = $url["host"];
+        $host = $this->target = $url["host"];
         if (isset($url["port"])) {
             $this->target .= ":{$url['port']}";
+            if ($url["port"] != ($this->crypto ? 443 : 80)) {
+                $host = $this->target;
+            }
         } elseif ($this->crypto) {
             $this->target .= ":443";
         } else {
             $this->target .= ":80";
         }
-        $this->headers["host"] = $this->target;
+        $this->headers["Host"] = $host;
         $this->options = $options;
         if (isset($url["path"])) {
             $this->path = $url["path"];
@@ -82,18 +85,18 @@ class Handshake {
                     $data .= $bytes = fgets($socket);
                     if ($bytes == '' || \strlen($bytes) > 32768) {
                         \Amp\cancel($reader);
-                        $deferred->succeed(null);
+                        $deferred->resolve(null);
                     } elseif (substr($data, -4) == "\r\n\r\n") {
                         \Amp\cancel($reader);
-                        $deferred->succeed($this->parseResponse($data));
+                        $deferred->resolve($this->parseResponse($data));
                     }
                 });
             } else {
-                $deferred->succeed(null);
+                $deferred->resolve(null);
             }
             \Amp\cancel($writer);
         });
-        return $deferred->promise();
+        return $deferred->getAwaitable();
     }
 
     private function parseResponse($data) {
