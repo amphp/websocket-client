@@ -124,6 +124,7 @@ class Rfc6455Endpoint implements Endpoint {
 
     private function unloadClient() {
         $this->parser = null;
+        $this->socket = null;
         if ($this->readWatcher) {
             \Amp\cancel($this->readWatcher);
         }
