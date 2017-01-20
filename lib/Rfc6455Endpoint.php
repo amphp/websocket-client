@@ -76,13 +76,13 @@ class Rfc6455Endpoint {
         Loop::unreference($this->timeoutWatcher);
         $this->connectedAt = \time();
         $this->socket = $socket;
-        $this->parser = $this->parser([$this, "onParse"]);
+        $this->parser = $this->parser($this);
         $this->writeWatcher = Loop::onWritable($socket, [$this, "onWritable"]);
         Loop::disable($this->writeWatcher);
         $this->readWatcher = Loop::onReadable($this->socket, [$this, "onReadable"]);
     }
 
-    public function close(int $code, string $reason): Promise {
+    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): Promise {
         // Only proceed if we haven't already begun the close handshake elsewhere
         if ($this->closedAt) {
             return new Success;
@@ -132,32 +132,11 @@ class Rfc6455Endpoint {
         }
     }
 
-    private function onParse(array $parseResult) {
-        switch (array_shift($parseResult)) {
-            case self::CONTROL:
-                $this->onParsedControlFrame($parseResult);
-                break;
-            case self::OP_TEXT:
-                $this->onParsedData($parseResult, false);
-                break;
-            case self::OP_BIN:
-                $this->onParsedData($parseResult, true);
-                break;
-            case self::ERROR:
-                $this->onParsedError($parseResult);
-                break;
-            default:
-                assert(false, "Unknown Rfc6455Parser result code");
-        }
-    }
-
-    private function onParsedControlFrame(array $parseResult) {
+    private function onParsedControlFrame(int $opcode, string $data) {
         // something went that wrong that we had to shutdown our readWatcher... if parser has anything left, we don't care!
         if (!$this->readWatcher) {
             return;
         }
-
-        list($data, $opcode) = $parseResult;
 
         switch ($opcode) {
             case self::OP_CLOSE:
@@ -189,16 +168,15 @@ class Rfc6455Endpoint {
         }
     }
 
-    private function onParsedData(array $parseResult, $binary) {
+    private function onParsedData(string $data, int $opcode, bool $terminated) {
         if ($this->closedAt) {
             return;
         }
 
         $this->lastDataReadAt = \time();
 
-        list($data, $terminated) = $parseResult;
-
         if (!$this->msgEmitter) {
+            $binary = $opcode === self::OP_BIN;
             if ($this->readEmitters) {
                 list($this->msgEmitter, $msg) = \reset($this->readEmitters);
                 $msg->setBinary($binary);
@@ -215,18 +193,15 @@ class Rfc6455Endpoint {
             $msgEmitter = $this->msgEmitter;
             $this->msgEmitter = null;
             $msgEmitter->resolve();
+            ++$this->messagesRead;
         }
-
-        $this->messagesRead += $terminated;
     }
 
-    private function onParsedError(array $parseResult) {
+    private function onParsedError(int $code, string $msg) {
         // something went that wrong that we had to shutdown our readWatcher... if parser has anything left, we don't care!
         if (!$this->readWatcher) {
             return;
         }
-
-        list($msg, $code) = $parseResult;
 
         if ($code) {
             if ($this->closedAt || $code == Code::PROTOCOL_ERROR) {
@@ -375,39 +350,41 @@ class Rfc6455Endpoint {
     /**
      * A stateful generator websocket frame parser
      *
-     * @param callable $emitCallback A callback to receive parser event emissions
+     * @param \Amp\Websocket\Rfc6455Endpoint $endpoint Endpoint to receive parser event emissions
      * @param array $options Optional parser settings
      * @return \Generator
      */
-    static public function parser(callable $emitCallback, array $options = []) {
-        $emitThreshold = isset($options["threshold"]) ? $options["threshold"] : 32768;
-        $maxFrameSize = isset($options["max_frame_size"]) ? $options["max_frame_size"] : PHP_INT_MAX;
-        $maxMsgSize = isset($options["max_msg_size"]) ? $options["max_msg_size"] : PHP_INT_MAX;
-        $textOnly = isset($options["text_only"]) ? $options["text_only"] : false;
-        $doUtf8Validation = $validateUtf8 = isset($options["validate_utf8"]) ? $options["validate_utf8"] : false;
+    public static function parser(self $endpoint, array $options = []): \Generator {
+        $emitThreshold = $options["threshold"] ?? 32768;
+        $maxFrameSize = $options["max_frame_size"] ?? PHP_INT_MAX;
+        $maxMsgSize = $options["max_msg_size"] ?? PHP_INT_MAX;
+        $textOnly = $options["text_only"] ?? false;
+        $doUtf8Validation = $validateUtf8 = $options["validate_utf8"] ?? false;
 
         $dataMsgBytesRecd = 0;
         $nextEmit = $emitThreshold;
         $dataArr = [];
 
         $buffer = yield;
+        $offset = 0;
         $bufferSize = \strlen($buffer);
         $frames = 0;
 
         while (1) {
-            $frameBytesRecd = 0;
-            $payloadReference = '';
-
-            while ($bufferSize < 2) {
-                $buffer .= (yield $frames);
-                $bufferSize = \strlen($buffer);
-                $frames = 0;
+            if ($bufferSize < 2) {
+                $buffer = substr($buffer, $offset);
+                $offset = 0;
+                do {
+                    $buffer .= yield $frames;
+                    $bufferSize = \strlen($buffer);
+                    $frames = 0;
+                } while ($bufferSize < 2);
             }
 
-            $firstByte = ord($buffer);
-            $secondByte = ord($buffer[1]);
+            $firstByte = ord($buffer[$offset]);
+            $secondByte = ord($buffer[$offset + 1]);
 
-            $buffer = substr($buffer, 2);
+            $offset += 2;
             $bufferSize -= 2;
 
             $fin = (bool)($firstByte & 0b10000000);
@@ -418,32 +395,37 @@ class Rfc6455Endpoint {
             $frameLength = $secondByte & 0b01111111;
 
             $isControlFrame = $opcode >= 0x08;
-            if ($opcode !== self::OP_CONT && !$isControlFrame) {
-                $dataOpcode = $opcode;
-                if ($validateUtf8) {
-                    $doUtf8Validation = $opcode === self::OP_TEXT;
-                }
+            if ($validateUtf8 && $opcode !== self::OP_CONT && !$isControlFrame) {
+                $doUtf8Validation = $opcode === self::OP_TEXT;
             }
 
             if ($frameLength === 0x7E) {
-                while ($bufferSize < 2) {
-                    $buffer .= (yield $frames);
-                    $bufferSize = \strlen($buffer);
-                    $frames = 0;
+                if ($bufferSize < 2) {
+                    $buffer = substr($buffer, $offset);
+                    $offset = 0;
+                    do {
+                        $buffer .= yield $frames;
+                        $bufferSize = \strlen($buffer);
+                        $frames = 0;
+                    } while ($bufferSize < 2);
                 }
 
-                $frameLength = unpack('n', $buffer[0] . $buffer[1])[1];
-                $buffer = substr($buffer, 2);
+                $frameLength = unpack('n', $buffer[$offset] . $buffer[$offset + 1])[1];
+                $offset += 2;
                 $bufferSize -= 2;
             } elseif ($frameLength === 0x7F) {
-                while ($bufferSize < 8) {
-                    $buffer .= (yield $frames);
-                    $bufferSize = \strlen($buffer);
-                    $frames = 0;
+                if ($bufferSize < 8) {
+                    $buffer = substr($buffer, $offset);
+                    $offset = 0;
+                    do {
+                        $buffer .= yield $frames;
+                        $bufferSize = \strlen($buffer);
+                        $frames = 0;
+                    } while ($bufferSize < 8);
                 }
 
-                $lengthLong32Pair = unpack('N2', substr($buffer, 0, 8));
-                $buffer = substr($buffer, 8);
+                $lengthLong32Pair = unpack('N2', substr($buffer, $offset, 8));
+                $offset += 8;
                 $bufferSize -= 8;
 
                 if (PHP_INT_MAX === 0x7fffffff) {
@@ -463,9 +445,9 @@ class Rfc6455Endpoint {
                 }
             }
 
-            if ($frameLength > 0 && $isMasked) {
+            if ($isMasked) {
                 $code = Code::PROTOCOL_ERROR;
-                $errorMsg = 'Payload must not be masked';
+                $errorMsg = 'Payload must not be masked to client';
                 break;
             } elseif ($isControlFrame) {
                 if (!$fin) {
@@ -500,131 +482,122 @@ class Rfc6455Endpoint {
                 break;
             }
 
-            if ($isMasked) {
-                while ($bufferSize < 4) {
-                    $buffer .= (yield $frames);
+            if ($bufferSize >= $frameLength) {
+                if (!$isControlFrame) {
+                    $dataMsgBytesRecd += $frameLength;
+                }
+
+                $payload = substr($buffer, $offset, $frameLength);
+                $offset += $frameLength;
+                $bufferSize -= $frameLength;
+            } else {
+                if (!$isControlFrame) {
+                    $dataMsgBytesRecd += $bufferSize;
+                }
+                $frameBytesRecd = $bufferSize;
+
+                $payload = substr($buffer, $offset);
+
+                do {
+                    // if we want to validate UTF8, we must *not* send incremental mid-frame updates because the message might be broken in the middle of an utf-8 sequence
+                    // also, control frames always are <= 125 bytes, so we never will need this as per https://tools.ietf.org/html/rfc6455#section-5.5
+                    if (!$isControlFrame && $dataMsgBytesRecd >= $nextEmit) {
+                        if ($isMasked) {
+                            $payload ^= str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
+                            // Shift the mask so that the next data where the mask is used on has correct offset.
+                            $maskingKey = substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
+                        }
+
+                        if ($dataArr) {
+                            $dataArr[] = $payload;
+                            $payload = implode($dataArr);
+                            $dataArr = [];
+                        }
+
+                        if ($doUtf8Validation) {
+                            $string = $payload;
+                            /* @TODO: check how many bits are set to 1 instead of multiple (slow) preg_match()es and substr()s */
+                            for ($i = 0; !preg_match('//u', $payload) && $i < 8; $i++) {
+                                $payload = substr($payload, 0, -1);
+                            }
+                            if ($i === 8) {
+                                $code = Code::INCONSISTENT_FRAME_DATA_TYPE;
+                                $errorMsg = 'Invalid TEXT data; UTF-8 required';
+                                break 2;
+                            }
+
+                            $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
+                            $payload = $i > 0 ? substr($string, -$i) : '';
+                        } else {
+                            $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
+                            $payload = '';
+                        }
+
+                        $frameLength -= $frameBytesRecd;
+                        $nextEmit = $dataMsgBytesRecd + $emitThreshold;
+                        $frameBytesRecd = 0;
+                    }
+
+                    $buffer = yield $frames;
                     $bufferSize = \strlen($buffer);
                     $frames = 0;
-                }
 
-                $maskingKey = substr($buffer, 0, 4);
-                $buffer = substr($buffer, 4);
-                $bufferSize -= 4;
-            }
-
-            while (1) {
-                if ($bufferSize + $frameBytesRecd >= $frameLength) {
-                    $dataLen = $frameLength - $frameBytesRecd;
-                } else {
-                    $dataLen = $bufferSize;
-                }
-
-                if ($isControlFrame) {
-                    $payloadReference =& $controlPayload;
-                } else {
-                    $payloadReference =& $dataPayload;
-                    $dataMsgBytesRecd += $dataLen;
-                }
-
-                $payloadReference .= substr($buffer, 0, $dataLen);
-                $frameBytesRecd += $dataLen;
-
-                $buffer = substr($buffer, $dataLen);
-                $bufferSize -= $dataLen;
-
-                if ($frameBytesRecd == $frameLength) {
-                    break;
-                }
-
-                // if we want to validate UTF8, we must *not* send incremental mid-frame updates because the message might be broken in the middle of an utf-8 sequence
-                // also, control frames always are <= 125 bytes, so we never will need this as per https://tools.ietf.org/html/rfc6455#section-5.5
-                if (!$isControlFrame && $dataMsgBytesRecd >= $nextEmit) {
-                    if ($isMasked) {
-                        $payloadReference ^= str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
-                        // Shift the mask so that the next data where the mask is used on has correct offset.
-                        $maskingKey = substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
-                    }
-
-                    if ($dataArr) {
-                        $dataArr[] = $payloadReference;
-                        $payloadReference = implode($dataArr);
-                        $dataArr = [];
-                    }
-
-                    if ($doUtf8Validation) {
-                        $string = $payloadReference;
-                        for ($i = 0; !preg_match('//u', $payloadReference) && $i < 8; $i++) {
-                            $payloadReference = substr($payloadReference, 0, -1);
-                        }
-                        if ($i == 8) {
-                            $code = Code::INCONSISTENT_FRAME_DATA_TYPE;
-                            $errorMsg = 'Invalid TEXT data; UTF-8 required';
-                            break;
-                        }
-
-                        $emitCallback([$dataOpcode, $payloadReference, false]);
-                        $payloadReference = $i > 0 ? substr($string, -$i) : '';
+                    if ($bufferSize + $frameBytesRecd >= $frameLength) {
+                        $dataLen = $frameLength - $frameBytesRecd;
                     } else {
-                        $emitCallback([$dataOpcode, $payloadReference, false]);
-                        $payloadReference = '';
+                        $dataLen = $bufferSize;
                     }
 
-                    $frameLength -= $frameBytesRecd;
-                    $nextEmit = $dataMsgBytesRecd + $emitThreshold;
-                    $frameBytesRecd = 0;
-                }
+                    if (!$isControlFrame) {
+                        $dataMsgBytesRecd += $dataLen;
+                    }
 
-                $buffer .= (yield $frames);
-                $bufferSize = \strlen($buffer);
-                $frames = 0;
-            }
+                    $payload .= substr($buffer, 0, $dataLen);
+                    $frameBytesRecd += $dataLen;
+                } while ($frameBytesRecd !== $frameLength);
 
-            if ($isMasked) {
-                // This is memory hungry but it's ~70x faster than iterating byte-by-byte
-                // over the masked string. Deal with it; manual iteration is untenable.
-                $payloadReference ^= str_repeat($maskingKey, ($frameLength + 3) >> 2);
+                $offset = $dataLen;
+                $bufferSize -= $dataLen;
             }
 
             if ($fin || $dataMsgBytesRecd >= $emitThreshold) {
                 if ($isControlFrame) {
-                    $emit = [self::CONTROL, $payloadReference, $opcode];
+                    $endpoint->onParsedControlFrame($opcode, $payload);
                 } else {
                     if ($dataArr) {
-                        $dataArr[] = $payloadReference;
-                        $payloadReference = implode($dataArr);
+                        $dataArr[] = $payload;
+                        $payload = implode($dataArr);
                         $dataArr = [];
                     }
 
                     if ($doUtf8Validation) {
                         if ($fin) {
-                            $i = preg_match('//u', $payloadReference) ? 0 : 8;
+                            $i = preg_match('//u', $payload) ? 0 : 8;
                         } else {
-                            $string = $payloadReference;
-                            for ($i = 0; !preg_match('//u', $payloadReference) && $i < 8; $i++) {
-                                $payloadReference = substr($payloadReference, 0, -1);
+                            $string = $payload;
+                            for ($i = 0; !preg_match('//u', $payload) && $i < 8; $i++) {
+                                $payload = substr($payload, 0, -1);
                             }
                             if ($i > 0) {
                                 $dataArr[] = substr($string, -$i);
                             }
                         }
-                        if ($i == 8) {
+                        if ($i === 8) {
                             $code = Code::INCONSISTENT_FRAME_DATA_TYPE;
                             $errorMsg = 'Invalid TEXT data; UTF-8 required';
                             break;
                         }
                     }
 
-                    $emit = [$dataOpcode, $payloadReference, $fin];
-
                     if ($fin) {
                         $dataMsgBytesRecd = 0;
                     }
                     $nextEmit = $dataMsgBytesRecd + $emitThreshold;
-                }
 
-                $emitCallback($emit);
+                    $endpoint->onParsedData($payload, $opcode === self::OP_BIN, $fin);
+                }
             } else {
-                $dataArr[] = $payloadReference;
+                $dataArr[] = $payload;
             }
 
             $frames++;
@@ -632,10 +605,7 @@ class Rfc6455Endpoint {
 
         // An error occurred...
         // stop parsing here ...
-        $emitCallback([self::ERROR, $errorMsg, $code]);
+        $endpoint->onParsedError($code, $errorMsg);
         yield $frames;
-        while (1) {
-            yield 0;
-        }
     }
 }
