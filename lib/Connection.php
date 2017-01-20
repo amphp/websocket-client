@@ -2,10 +2,14 @@
 
 namespace Amp\Websocket;
 
-use Amp\Postponed;
+use Amp\Emitter;
+use AsyncInterop\Promise;
 
 class Connection implements Endpoint, \Iterator {
+    /** @var \Amp\Websocket\Endpoint */
     private $processor;
+
+    /** @var \Amp\Websocket\Message */
     private $message;
 
     public function __construct($socket, array $headers) {
@@ -13,19 +17,19 @@ class Connection implements Endpoint, \Iterator {
         $this->next();
     }
 
-    public function send($data) {
-        $this->processor->send($data);
+    public function send(string $data): Promise {
+        return $this->processor->send($data);
     }
 
-    public function sendBinary($data) {
-        $this->processor->send($data, true);
+    public function sendBinary(string $data): Promise {
+        return $this->processor->send($data, true);
     }
 
-    public function close($code = Code::NORMAL_CLOSE, $reason = "") {
-        $this->processor->close($code, $reason);
+    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ""): Promise {
+        return $this->processor->close($code, $reason);
     }
 
-    public function getInfo() {
+    public function getInfo(): array {
         return [
             'bytes_read'    => $this->processor->bytesRead,
             'bytes_sent'    => $this->processor->bytesSent,
@@ -68,10 +72,10 @@ class Connection implements Endpoint, \Iterator {
             default:
                 throw new \Error("Unknown option $option");
         }
-        $this->processor->$option = $value;
+        $this->processor->{$option} = $value;
     }
 
-    public function current() {
+    public function current(): Message {
         return $this->message;
     }
 
@@ -80,17 +84,17 @@ class Connection implements Endpoint, \Iterator {
             $this->message = \reset($this->processor->readQueue);
             unset($this->processor->readQueue[\key($this->processor->readQueue)]);
         } else {
-            $postponed = new Postponed;
-            $this->message = new Message($postponed->getObservable());
-            $this->processor->readPostponeds[] = [$postponed, $this->message];
+            $emitter = new Emitter;
+            $this->message = new Message($emitter->stream());
+            $this->processor->readEmitters[] = [$emitter, $this->message];
         }
     }
 
-    public function key() {
-        return $this->processor->messagesRead + \count($this->processor->readPostponeds) - \count($this->processor->readQueue);
+    public function key(): int {
+        return $this->processor->messagesRead + \count($this->processor->readEmitters) - \count($this->processor->readQueue);
     }
 
-    public function valid() {
+    public function valid(): bool {
         return !$this->processor->closedAt;
     }
 

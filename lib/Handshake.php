@@ -3,6 +3,7 @@
 namespace Amp\Websocket;
 
 use Amp\Deferred;
+use AsyncInterop\{ Loop, Promise };
 
 class Handshake {
     const ACCEPT_CONCAT = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -18,7 +19,7 @@ class Handshake {
      * @param string $url target address of websocket (e.g. ws://foo.bar/baz or wss://crypto.example/?secureConnection)
      * @param array $options to be passed to Socket\(crypto)Connect
      */
-    public function __construct($url, $options = []) {
+    public function __construct(string $url, array $options = []) {
         $url = parse_url($url);
         $this->crypto = $url["scheme"] == "wss";
         $host = $this->target = $url["host"];
@@ -44,20 +45,20 @@ class Handshake {
         }
     }
 
-    public function setHeader($field, $value) {
+    public function setHeader(string $field, $value): self {
         $this->headers[$field] = $value;
         return $this;
     }
 
-    public function getTarget() {
+    public function getTarget(): string {
         return $this->target;
     }
 
-    public function hasCrypto() {
+    public function hasCrypto(): bool {
         return $this->crypto;
     }
 
-    public function getOptions() {
+    public function getOptions(): array {
         return $this->options;
     }
 
@@ -70,33 +71,33 @@ class Handshake {
         return "GET $this->path HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
     }
 
-    public function send($socket) {
+    public function send($socket): Promise {
         $deferred = new Deferred;
         stream_set_blocking($socket, false);
         $data = $this->getRequest();
-        \Amp\onWritable($socket, function($writer, $socket) use ($deferred, &$data) {
-            if ($bytes = fwrite($socket, $data)) {
+        Loop::onWritable($socket, function($writer, $socket) use ($deferred, &$data) {
+            if ($bytes = @fwrite($socket, $data)) {
                 if ($bytes < \strlen($data)) {
                     $data = substr($data, $bytes);
                     return;
                 }
                 $data = '';
-                \Amp\onReadable($socket, function($reader, $socket) use ($deferred, &$data) {
+                Loop::onReadable($socket, function($reader, $socket) use ($deferred, &$data) {
                     $data .= $bytes = fgets($socket);
                     if ($bytes == '' || \strlen($bytes) > 32768) {
-                        \Amp\cancel($reader);
+                        Loop::cancel($reader);
                         $deferred->resolve(null);
                     } elseif (substr($data, -4) == "\r\n\r\n") {
-                        \Amp\cancel($reader);
+                        Loop::cancel($reader);
                         $deferred->resolve($this->parseResponse($data));
                     }
                 });
             } else {
                 $deferred->resolve(null);
             }
-            \Amp\cancel($writer);
+            Loop::cancel($writer);
         });
-        return $deferred->getAwaitable();
+        return $deferred->promise();
     }
 
     private function parseResponse($data) {

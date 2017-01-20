@@ -1,12 +1,14 @@
 <?php
 
-namespace Amp;
+namespace Amp\Websocket;
 
-function websocket($handshake) {
+use Amp\Socket;
+
+function connect($handshake) {
     if (is_string($handshake)) {
-        $handshake = new Websocket\Handshake($handshake);
-    } elseif (!$handshake instanceof Websocket\Handshake) {
-        throw new \TypeError(__FUNCTION__ . " expected parameter 1 to be string or " . Websocket\Handshake::class . ", got " . (is_object($handshake) ? get_class($handshake) : gettype($handshake)));
+        $handshake = new Handshake($handshake);
+    } elseif (!$handshake instanceof Handshake) {
+        throw new \TypeError(__FUNCTION__ . " expected parameter 1 to be string or " . Handshake::class . ", got " . (is_object($handshake) ? get_class($handshake) : gettype($handshake)));
     }
 
     if ($handshake->hasCrypto()) {
@@ -15,12 +17,12 @@ function websocket($handshake) {
         $promise = Socket\connect($handshake->getTarget(), $handshake->getOptions());
     }
 
-    return pipe($promise, function($socket) use ($handshake) {
-        return pipe($handshake->send($socket), function($headers) use ($socket) {
+    return \Amp\pipe($promise, function($socket) use ($handshake) {
+        return \Amp\pipe($handshake->send($socket), function($headers) use ($socket) {
             if (!$headers) {
-                throw new Websocket\ServerException;
+                throw new ServerException;
             }
-            return new Websocket\Connection($socket, $headers);
+            return new Connection($socket, $headers);
         });
     });
 }

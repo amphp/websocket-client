@@ -2,9 +2,8 @@
 
 namespace Amp\Websocket;
 
-use Amp\Deferred;
-use Amp\Postponed;
-use Amp\Failure;
+use Amp\{ Deferred, Emitter, Failure, Success };
+use AsyncInterop\{ Loop, Promise };
 
 class Rfc6455Endpoint {
     public $autoFrameSize = 32768;
@@ -19,7 +18,6 @@ class Rfc6455Endpoint {
 
     private $socket;
     private $parser;
-    private $builder = [];
     private $readWatcher;
     private $writeWatcher;
 
@@ -35,8 +33,8 @@ class Rfc6455Endpoint {
 
     public $readMessage;
     public $readQueue = [];
-    public $readPostponeds = [];
-    public $msgPostponed;
+    public $readEmitters = [];
+    public $msgEmitter;
 
     private $closeTimeout;
     private $timeoutWatcher;
@@ -74,29 +72,31 @@ class Rfc6455Endpoint {
         if (!$headers) {
             throw new ServerException;
         }
-        $this->timeoutWatcher = \Amp\repeat(1000, [$this, "timeout"]);
+        $this->timeoutWatcher = Loop::repeat(1000, [$this, "timeout"]);
+        Loop::unreference($this->timeoutWatcher);
         $this->connectedAt = \time();
         $this->socket = $socket;
         $this->parser = $this->parser([$this, "onParse"]);
-        $this->writeWatcher = \Amp\onWritable($socket, [$this, "onWritable"]);
-        \Amp\disable($this->writeWatcher);
-        $this->readWatcher = \Amp\onReadable($this->socket, [$this, "onReadable"]);
+        $this->writeWatcher = Loop::onWritable($socket, [$this, "onWritable"]);
+        Loop::disable($this->writeWatcher);
+        $this->readWatcher = Loop::onReadable($this->socket, [$this, "onReadable"]);
     }
 
-    public function close($code, $reason) {
+    public function close(int $code, string $reason): Promise {
         // Only proceed if we haven't already begun the close handshake elsewhere
         if ($this->closedAt) {
-            return;
+            return new Success;
         }
 
         $this->closeTimeout = \time() + $this->closePeriod;
         $this->closeCode = $code;
         $this->closeReason = $reason;
-        $this->sendCloseFrame($code, $reason);
-        if ($this->msgPostponed) {
-            $this->msgPostponed->fail(new ServerException);
+        $promise = $this->sendCloseFrame($code, $reason);
+        if ($this->msgEmitter) {
+            $this->msgEmitter->fail(new ServerException);
         }
         // Don't unload the client here, it will be unloaded upon timeout
+        return $promise;
     }
 
     private function sendCloseFrame($code, $msg) {
@@ -108,17 +108,17 @@ class Rfc6455Endpoint {
     private function unloadServer() {
         $this->parser = null;
         if ($this->readWatcher) {
-            \Amp\cancel($this->readWatcher);
+            Loop::cancel($this->readWatcher);
         }
         if ($this->writeWatcher) {
-            \Amp\cancel($this->writeWatcher);
+            Loop::cancel($this->writeWatcher);
         }
 
         // fail not yet terminated message streams; they *must not* be failed before client is removed
-        if ($this->msgPostponed) {
-            $this->msgPostponed->fail(new ServerException);
-            foreach ($this->readPostponeds as list($postponed)) {
-                $postponed->fail(new ServerException);
+        if ($this->msgEmitter) {
+            $this->msgEmitter->fail(new ServerException);
+            foreach ($this->readEmitters as list($emitter)) {
+                $emitter->fail(new ServerException);
             }
         }
 
@@ -172,7 +172,7 @@ class Rfc6455Endpoint {
                     $reason = substr($data, 2);
 
                     @stream_socket_shutdown($this->socket, STREAM_SHUT_RD);
-                    \Amp\cancel($this->readWatcher);
+                    Loop::cancel($this->readWatcher);
                     $this->readWatcher = null;
                     $this->close($code, $reason);
                 }
@@ -198,22 +198,23 @@ class Rfc6455Endpoint {
 
         list($data, $terminated) = $parseResult;
 
-        if (!$this->msgPostponed) {
-            if ($this->readPostponeds) {
-                list($this->msgPostponed, $msg) = \reset($this->readPostponeds);
+        if (!$this->msgEmitter) {
+            if ($this->readEmitters) {
+                list($this->msgEmitter, $msg) = \reset($this->readEmitters);
                 $msg->setBinary($binary);
-                unset($this->readPostponeds[\key($this->readPostponeds)]);
+                unset($this->readEmitters[\key($this->readEmitters)]);
             } else {
-                $this->msgPostponed = new Postponed;
-                $msg = new Message($this->msgPostponed->getObservable(), $binary);
+                $this->msgEmitter = new Emitter;
+                $msg = new Message($this->msgEmitter->stream(), $binary);
                 $this->readQueue[] = $msg;
             }
         }
 
-        $this->msgPostponed->emit($data);
+        $this->msgEmitter->emit($data);
         if ($terminated) {
-            $this->msgPostponed->resolve();
-            $this->msgPostponed = null;
+            $msgEmitter = $this->msgEmitter;
+            $this->msgEmitter = null;
+            $msgEmitter->resolve();
         }
 
         $this->messagesRead += $terminated;
@@ -230,7 +231,7 @@ class Rfc6455Endpoint {
         if ($code) {
             if ($this->closedAt || $code == Code::PROTOCOL_ERROR) {
                 @stream_socket_shutdown($this->socket, STREAM_SHUT_RD);
-                \Amp\cancel($this->readWatcher);
+                Loop::cancel($this->readWatcher);
                 $this->readWatcher = null;
             }
 
@@ -243,7 +244,7 @@ class Rfc6455Endpoint {
     public function onReadable($watcherId, $socket) {
         $data = @\fread($socket, 8192);
 
-        if ($data != "") {
+        if ($data !== "") {
             $this->lastReadAt = \time();
             $this->bytesRead += \strlen($data);
             $this->framesRead += $this->parser->send($data);
@@ -282,7 +283,7 @@ class Rfc6455Endpoint {
                 $this->writeDeferred = array_shift($this->writeDeferredControlQueue);
             } elseif ($this->closedAt) {
                 @stream_socket_shutdown($socket, STREAM_SHUT_WR);
-                \Amp\cancel($watcherId);
+                Loop::cancel($watcherId);
                 $this->writeWatcher = null;
                 $this->writeBuffer = "";
             } elseif ($this->writeDataQueue) {
@@ -292,33 +293,26 @@ class Rfc6455Endpoint {
                 $this->writeDeferred = array_shift($this->writeDeferredDataQueue);
             } else {
                 $this->writeBuffer = "";
-                \Amp\disable($watcherId);
+                Loop::disable($watcherId);
             }
         }
     }
 
-    private function compile($msg, $opcode, $fin = true) {
-        $frameInfo = ["msg" => $msg, "rsv" => 0b000, "fin" => $fin, "opcode" => $opcode];
+    private function compile(string $msg, int $opcode, bool $fin = true): Promise {
+        $rsv = 0b000;
 
-        // @TODO filter mechanism …?! (e.g. gzip)
-        foreach ($this->builder as $gen) {
-            $gen->send($frameInfo);
-            $gen->send(null);
-            $frameInfo = $gen->current();
-        }
+        // @TODO Add filter mechanism (e.g. for gzip encoding)
 
-        return $this->write($frameInfo);
+        return $this->write($msg, $opcode, $rsv, $fin);
     }
 
-    private function write($frameInfo) {
+    private function write(string $msg, int $opcode, int $rsv, bool $fin): Promise {
         if ($this->closedAt) {
             return new Failure(new ServerException);
         }
 
-        $msg = $frameInfo["msg"];
         $len = \strlen($msg);
-
-        $w = chr(($frameInfo["fin"] << 7) | ($frameInfo["rsv"] << 4) | $frameInfo["opcode"]);
+        $w = chr(($fin << 7) | ($rsv << 4) | $opcode);
 
         if ($len > 0xFFFF) {
             $w .= "\xFF" . pack('J', $len);
@@ -333,9 +327,9 @@ class Rfc6455Endpoint {
         $w .= $mask;
         $w .= $msg ^ str_repeat($mask, ($len + 3) >> 2);
 
-        \Amp\enable($this->writeWatcher);
+        Loop::enable($this->writeWatcher);
         if ($this->writeBuffer != "") {
-            if ($frameInfo["opcode"] >= 0x8) {
+            if ($opcode >= 0x8) {
                 $this->writeControlQueue[] = $w;
                 $deferred = $this->writeDeferredControlQueue[] = new Deferred;
             } else {
@@ -347,27 +341,10 @@ class Rfc6455Endpoint {
             $deferred = $this->writeDeferred = new Deferred;
         }
 
-        return $deferred->getAwaitable();
+        return $deferred->promise();
     }
 
-    // just a dummy builder ... no need to really use it
-    private function defaultBuilder() {
-        $yield = yield;
-        while (1) {
-            $data = [];
-            $frameInfo = $yield;
-            $data[] = $yield["msg"];
-
-            while (($yield = yield) !== null); {
-                $data[] = $yield;
-            }
-
-            $msg = count($data) == 1 ? $data[0] : implode($data);
-            $yield = (yield $msg . $frameInfo);
-        }
-    }
-
-    public function send($data, $binary = false) {
+    public function send(string $data, bool $binary = false): Promise {
         $this->messagesSent++;
 
         $opcode = $binary ? self::OP_BIN : self::OP_TEXT;
