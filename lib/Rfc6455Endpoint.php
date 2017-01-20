@@ -338,6 +338,10 @@ class Rfc6455Endpoint {
         return $this->compile($data, $opcode);
     }
 
+    public function sendBinary(string $data): Promise {
+        return $this->send($data, true);
+    }
+
     public function timeout() {
         $now = \time();
 

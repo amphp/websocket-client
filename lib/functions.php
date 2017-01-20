@@ -4,7 +4,7 @@ namespace Amp\Websocket;
 
 use Amp\Socket;
 
-function connect($handshake) {
+function connect($handshake, array $options = []) {
     if (is_string($handshake)) {
         $handshake = new Handshake($handshake);
     } elseif (!$handshake instanceof Handshake) {
@@ -12,17 +12,10 @@ function connect($handshake) {
     }
 
     if ($handshake->hasCrypto()) {
-        $promise = Socket\cryptoConnect($handshake->getTarget(), $handshake->getOptions());
+        $promise = Socket\cryptoConnect($handshake->getTarget(), $options);
     } else {
-        $promise = Socket\connect($handshake->getTarget(), $handshake->getOptions());
+        $promise = Socket\connect($handshake->getTarget(), $options);
     }
 
-    return \Amp\pipe($promise, function($socket) use ($handshake) {
-        return \Amp\pipe($handshake->send($socket), function($headers) use ($socket) {
-            if (!$headers) {
-                throw new ServerException;
-            }
-            return new Connection($socket, $headers);
-        });
-    });
+    return \Amp\pipe($promise, [$handshake, 'send']);
 }

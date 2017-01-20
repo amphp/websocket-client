@@ -7,19 +7,18 @@ use AsyncInterop\{ Loop, Promise };
 
 class Handshake {
     const ACCEPT_CONCAT = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    const ACCEPT_NONCE = 'Amp\Websocket+13'; // should be randomly selected per RFC 6455 4.1§7, but...
+    const ACCEPT_NONCE_LENGTH = 12;
 
     private $crypto;
     private $target;
     private $path;
-    private $options;
     private $headers = [];
 
     /**
      * @param string $url target address of websocket (e.g. ws://foo.bar/baz or wss://crypto.example/?secureConnection)
      * @param array $options to be passed to Socket\(crypto)Connect
      */
-    public function __construct(string $url, array $options = []) {
+    public function __construct(string $url) {
         $url = parse_url($url);
         $this->crypto = $url["scheme"] == "wss";
         $host = $this->target = $url["host"];
@@ -34,7 +33,6 @@ class Handshake {
             $this->target .= ":80";
         }
         $this->headers["Host"] = $host;
-        $this->options = $options;
         if (isset($url["path"])) {
             $this->path = $url["path"];
         } else {
@@ -58,16 +56,12 @@ class Handshake {
         return $this->crypto;
     }
 
-    public function getOptions(): array {
-        return $this->options;
-    }
-
-    private function getRequest() {
+    private function getRequest(): string {
         $headers = "";
         foreach ($this->headers as $field => $value) {
             $headers .= "$field: $value\r\n";
         }
-        $accept = base64_encode(self::ACCEPT_NONCE);
+        $accept = base64_encode(random_bytes(self::ACCEPT_NONCE_LENGTH));
         return "GET $this->path HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
     }
 
@@ -83,26 +77,30 @@ class Handshake {
                 }
                 $data = '';
                 Loop::onReadable($socket, function($reader, $socket) use ($deferred, &$data) {
-                    $data .= $bytes = fgets($socket);
+                    $data .= $bytes = @fgets($socket);
                     if ($bytes == '' || \strlen($bytes) > 32768) {
                         Loop::cancel($reader);
-                        $deferred->resolve(null);
+                        $deferred->fail(new ServerException("Failed to read response from server"));
                     } elseif (substr($data, -4) == "\r\n\r\n") {
                         Loop::cancel($reader);
-                        $deferred->resolve($this->parseResponse($data));
+                        try {
+                            $deferred->resolve($this->createConnection($socket, $data));
+                        } catch (\Throwable $e) {
+                            $deferred->fail($e);
+                        }
                     }
                 });
             } else {
-                $deferred->resolve(null);
+                $deferred->fail(new ServerException("Failed to write request"));
             }
             Loop::cancel($writer);
         });
         return $deferred->promise();
     }
 
-    private function parseResponse($data) {
+    private function createConnection($socket, string $data): Connection {
         if (!preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", substr($data, 0, strpos($data, "\r\n")))) {
-            return null;
+            throw new ServerException("Did not receive switching protocols response");
         }
         preg_match_all("(
             (?P<field>[^()<>@,;:\\\"/[\\]?={}\x01-\x20\x7F]+):[\x20\x09]*
@@ -113,6 +111,6 @@ class Handshake {
             $headers[strtolower($field)][] = $m["value"][$idx];
         }
         // TODO: validate headers...
-        return $headers;
+        return new Rfc6455Connection($socket, $headers);
     }
 }
