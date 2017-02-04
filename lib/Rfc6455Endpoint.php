@@ -611,5 +611,9 @@ class Rfc6455Endpoint {
         // stop parsing here ...
         $endpoint->onParsedError($code, $errorMsg);
         yield $frames;
+        
+        while (1) {
+            yield 0;
+        }
     }
 }
