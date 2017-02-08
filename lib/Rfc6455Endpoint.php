@@ -93,7 +93,7 @@ class Rfc6455Endpoint {
         $this->closeReason = $reason;
         $this->sendCloseFrame($code, $reason);
         if ($this->msgEmitter) {
-            $this->msgEmitter->fail(new ServerException);
+            $this->msgEmitter->fail(new ServerException("The connection was closed"));
         }
         // Don't unload the client here, it will be unloaded upon timeout
     }
@@ -113,20 +113,22 @@ class Rfc6455Endpoint {
             Loop::cancel($this->writeWatcher);
         }
 
+        $exception = new ServerException("The connection was closed");
+
         // fail not yet terminated message streams; they *must not* be failed before client is removed
         if ($this->msgEmitter) {
-            $this->msgEmitter->fail(new ServerException);
+            $this->msgEmitter->fail($exception);
             foreach ($this->readEmitters as list($emitter)) {
-                $emitter->fail(new ServerException);
+                $emitter->fail($exception);
             }
         }
 
         if ($this->writeBuffer != "") {
-            $this->writeDeferred->fail(new ServerException);
+            $this->writeDeferred->fail($exception);
         }
         foreach ([$this->writeDeferredDataQueue, $this->writeDeferredControlQueue] as $deferreds) {
             foreach ($deferreds as $deferred) {
-                $deferred->fail(new ServerException);
+                $deferred->fail($exception);
             }
         }
     }
@@ -282,7 +284,7 @@ class Rfc6455Endpoint {
 
     private function write(string $msg, int $opcode, int $rsv, bool $fin): Promise {
         if ($this->closedAt) {
-            return new Failure(new ServerException);
+            return new Failure(new ServerException("The connection has been closed"));
         }
 
         $len = \strlen($msg);
