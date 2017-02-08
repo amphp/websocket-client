@@ -2,7 +2,7 @@
 
 namespace Amp\Websocket;
 
-use Amp\Emitter;
+use Amp\{ Deferred, Emitter };
 use AsyncInterop\Promise;
 
 class Rfc6455Connection implements Connection {
@@ -85,8 +85,9 @@ class Rfc6455Connection implements Connection {
             unset($this->processor->readQueue[\key($this->processor->readQueue)]);
         } else {
             $emitter = new Emitter;
-            $this->message = new Message($emitter->stream());
-            $this->processor->readEmitters[] = [$emitter, $this->message];
+            $deferred = new Deferred;
+            $this->message = new Message($emitter->stream(), $deferred->promise());
+            $this->processor->readEmitters[] = [$emitter, $this->message, $deferred];
         }
     }
 

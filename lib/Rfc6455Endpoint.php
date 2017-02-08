@@ -177,12 +177,12 @@ class Rfc6455Endpoint {
         if (!$this->msgEmitter) {
             $binary = $opcode === self::OP_BIN;
             if ($this->readEmitters) {
-                list($this->msgEmitter, $msg) = \reset($this->readEmitters);
-                $msg->setBinary($binary);
+                list($this->msgEmitter, $msg, $binaryDeferred) = \reset($this->readEmitters);
+                $binaryDeferred->resolve($binary);
                 unset($this->readEmitters[\key($this->readEmitters)]);
             } else {
                 $this->msgEmitter = new Emitter;
-                $msg = new Message($this->msgEmitter->stream(), $binary);
+                $msg = new Message($this->msgEmitter->stream(), new Success($binary));
                 $this->readQueue[] = $msg;
             }
         }

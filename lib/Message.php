@@ -2,36 +2,22 @@
 
 namespace Amp\Websocket;
 
+use AsyncInterop\Promise;
+
 class Message extends \Amp\Message {
-    /** @var bool|null */
+    /** @var \AsyncInterop\Promise */
     private $binary;
 
-    public function __construct(\Amp\Stream $stream, bool $binary = null) {
+    public function __construct(\Amp\Stream $stream, Promise $binary) {
         parent::__construct($stream);
         $this->binary = $binary;
     }
 
     /**
-     * @internal
-     *
-     * @param bool $binary
-     *
-     * @throws \Error Thrown if the binary flag is set multiple times.
+     * @return \AsyncInterop\Promise<bool> Returns a promise that resolves to true if the message is binary, false if
+     *     it is UTF-8 text.
      */
-    public function setBinary(bool $binary) {
-        if ($this->binary !== null) {
-            throw new \Error("Binary flag has already been set");
-        }
-
-        $this->binary = $binary;
-    }
-
-    public function isBinary() {
-        if ($this->binary === null) {
-            throw new \Error(
-                \sprintf("No data has arrived; wait for promise returned from %s::advance() to resolve", __CLASS__)
-            );
-        }
+    public function isBinary(): Promise {
         return $this->binary;
     }
 }
