@@ -82,21 +82,20 @@ class Rfc6455Endpoint {
         $this->readWatcher = Loop::onReadable($this->socket, [$this, "onReadable"]);
     }
 
-    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): Promise {
+    public function close(int $code = Code::NORMAL_CLOSE, string $reason = '') {
         // Only proceed if we haven't already begun the close handshake elsewhere
         if ($this->closedAt) {
-            return new Success;
+            return;
         }
 
         $this->closeTimeout = \time() + $this->closePeriod;
         $this->closeCode = $code;
         $this->closeReason = $reason;
-        $promise = $this->sendCloseFrame($code, $reason);
+        $this->sendCloseFrame($code, $reason);
         if ($this->msgEmitter) {
             $this->msgEmitter->fail(new ServerException);
         }
         // Don't unload the client here, it will be unloaded upon timeout
-        return $promise;
     }
 
     private function sendCloseFrame($code, $msg) {

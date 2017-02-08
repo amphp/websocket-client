@@ -25,8 +25,8 @@ class Rfc6455Connection implements Connection {
         return $this->processor->send($data, true);
     }
 
-    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ""): Promise {
-        return $this->processor->close($code, $reason);
+    public function close(int $code = Code::NORMAL_CLOSE, string $reason = "") {
+        $this->processor->close($code, $reason);
     }
 
     public function getInfo(): array {
