@@ -31,10 +31,9 @@ class Rfc6455Endpoint {
     private $writeControlQueue = [];
     private $writeDeferredControlQueue = [];
 
-    public $readMessage;
-    public $readQueue = [];
-    public $readEmitters = [];
-    public $msgEmitter;
+    private $readQueue = [];
+    private $readEmitters = [];
+    private $msgEmitter;
 
     private $closeTimeout;
     private $timeoutWatcher;
@@ -96,6 +95,28 @@ class Rfc6455Endpoint {
             $this->msgEmitter->fail(new ServerException("The connection was closed"));
         }
         // Don't unload the client here, it will be unloaded upon timeout
+    }
+
+    public function pull(): Message {
+        if ($this->readQueue) {
+            $message = \reset($this->readQueue);
+            unset($this->readQueue[\key($this->readQueue)]);
+        } else {
+            $emitter = new Emitter;
+            $deferred = new Deferred;
+            $message = new Message($emitter->stream(), $deferred->promise());
+            $this->readEmitters[] = [$emitter, $message, $deferred];
+        }
+
+        return $message;
+    }
+
+    public function messageCount(): int {
+        return $this->messagesRead + \count($this->readEmitters) - \count($this->readQueue);
+    }
+
+    public function isClosed(): bool {
+        return (bool) $this->closedAt;
     }
 
     private function sendCloseFrame($code, $msg) {

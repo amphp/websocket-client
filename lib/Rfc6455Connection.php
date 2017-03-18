@@ -2,7 +2,6 @@
 
 namespace Amp\Websocket;
 
-use Amp\{ Deferred, Emitter };
 use AsyncInterop\Promise;
 
 class Rfc6455Connection implements Connection {
@@ -80,23 +79,15 @@ class Rfc6455Connection implements Connection {
     }
 
     public function next() {
-        if ($this->processor->readQueue) {
-            $this->message = \reset($this->processor->readQueue);
-            unset($this->processor->readQueue[\key($this->processor->readQueue)]);
-        } else {
-            $emitter = new Emitter;
-            $deferred = new Deferred;
-            $this->message = new Message($emitter->stream(), $deferred->promise());
-            $this->processor->readEmitters[] = [$emitter, $this->message, $deferred];
-        }
+        $this->message = $this->processor->pull();
     }
 
     public function key(): int {
-        return $this->processor->messagesRead + \count($this->processor->readEmitters) - \count($this->processor->readQueue);
+        return $this->processor->messageCount();
     }
 
     public function valid(): bool {
-        return !$this->processor->closedAt;
+        return !$this->processor->isClosed();
     }
 
     public function rewind() { }
