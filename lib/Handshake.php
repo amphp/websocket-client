@@ -2,8 +2,7 @@
 
 namespace Amp\Websocket;
 
-use Amp\Deferred;
-use AsyncInterop\{ Loop, Promise };
+use Amp\{ Deferred, Loop, Promise };
 
 class Handshake {
     const ACCEPT_CONCAT = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";

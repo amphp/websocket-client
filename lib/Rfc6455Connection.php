@@ -2,7 +2,7 @@
 
 namespace Amp\Websocket;
 
-use AsyncInterop\Promise;
+use Amp\Promise;
 
 class Rfc6455Connection implements Connection {
     /** @var \Amp\Websocket\Rfc6455Endpoint */

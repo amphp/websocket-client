@@ -2,13 +2,13 @@
 
 namespace Amp\Websocket;
 
-use Amp\Socket;
+use Amp\{ Promise, Socket, UnionTypeError };
 
 function connect($handshake, array $options = []) {
     if (is_string($handshake)) {
         $handshake = new Handshake($handshake);
     } elseif (!$handshake instanceof Handshake) {
-        throw new \TypeError(__FUNCTION__ . " expected parameter 1 to be string or " . Handshake::class . ", got " . (is_object($handshake) ? get_class($handshake) : gettype($handshake)));
+        throw new UnionTypeError(["string", Handshake::class], $handshake);
     }
 
     if ($handshake->hasCrypto()) {
@@ -17,5 +17,5 @@ function connect($handshake, array $options = []) {
         $promise = Socket\connect($handshake->getTarget(), $options);
     }
 
-    return \Amp\pipe($promise, [$handshake, 'send']);
+    return Promise\pipe($promise, [$handshake, 'send']);
 }

@@ -27,9 +27,8 @@
     "amphp/socket": "dev-amp_v2"
   },
   "require-dev": {
-    "amphp/loop": "dev-master",
     "phpunit/phpunit": "^5",
-    "fabpot/php-cs-fixer": "~1.9"
+    "friendsofphp/php-cs-fixer": "~1.9"
   },
   "autoload": {
     "psr-4": {

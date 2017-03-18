@@ -2,8 +2,7 @@
 
 namespace Amp\Websocket;
 
-use Amp\{ Deferred, Emitter, Failure, Success };
-use AsyncInterop\{ Loop, Promise };
+use Amp\{ Deferred, Emitter, Failure, Loop, Promise, Success };
 
 class Rfc6455Endpoint {
     public $autoFrameSize = 32768;

@@ -2,7 +2,7 @@
 
 namespace Amp\Websocket;
 
-use AsyncInterop\Promise;
+use Amp\Promise;
 
 interface Connection extends \Iterator {
     public function send(string $data): Promise;
