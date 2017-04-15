@@ -24,6 +24,7 @@
   "require": {
     "php": ">=7.0",
     "amphp/amp": "dev-master as 2.0",
+    "amphp/stream": "dev-master",
     "amphp/socket": "dev-amp_v2"
   },
   "require-dev": {

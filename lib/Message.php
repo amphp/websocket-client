@@ -4,7 +4,7 @@ namespace Amp\Websocket;
 
 use Amp\{ Promise, Stream };
 
-class Message extends \Amp\Message {
+class Message extends \Amp\ByteStream\Message {
     /** @var \Amp\Promise */
     private $binary;
 
