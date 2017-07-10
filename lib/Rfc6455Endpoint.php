@@ -2,7 +2,14 @@
 
 namespace Amp\Websocket;
 
-use Amp\{ Deferred, Emitter, Failure, Loop, Promise, Success };
+use Amp\Coroutine;
+use Amp\Deferred;
+use Amp\Emitter;
+use Amp\Failure;
+use Amp\Loop;
+use Amp\Promise;
+use Amp\Socket\Socket;
+use Amp\Success;
 
 class Rfc6455Endpoint {
     public $autoFrameSize = 32768;
@@ -17,18 +24,9 @@ class Rfc6455Endpoint {
 
     private $socket;
     private $parser;
-    private $readWatcher;
-    private $writeWatcher;
 
     public $pingCount = 0;
     public $pongCount = 0;
-
-    private $writeBuffer = '';
-    private $writeDeferred;
-    private $writeDataQueue = [];
-    private $writeDeferredDataQueue = [];
-    private $writeControlQueue = [];
-    private $writeDeferredControlQueue = [];
 
     private $readQueue = [];
     private $readEmitters = [];
@@ -66,7 +64,7 @@ class Rfc6455Endpoint {
     const CONTROL = -1;
     const ERROR = -2;
 
-    public function __construct($socket, array $headers) {
+    public function __construct(Socket $socket, array $headers, string $buffer) {
         if (!$headers) {
             throw new ServerException;
         }
@@ -75,9 +73,12 @@ class Rfc6455Endpoint {
         $this->connectedAt = \time();
         $this->socket = $socket;
         $this->parser = $this->parser($this);
-        $this->writeWatcher = Loop::onWritable($socket, [$this, "onWritable"]);
-        Loop::disable($this->writeWatcher);
-        $this->readWatcher = Loop::onReadable($this->socket, [$this, "onReadable"]);
+
+        if ($buffer !== "") {
+            $this->framesRead += $this->parser->send($buffer);
+        }
+
+        Promise\rethrow(new Coroutine($this->read()));
     }
 
     public function close(int $code = Code::NORMAL_CLOSE, string $reason = '') {
@@ -103,7 +104,7 @@ class Rfc6455Endpoint {
         } else {
             $emitter = new Emitter;
             $deferred = new Deferred;
-            $message = new Message($emitter->stream(), $deferred->promise());
+            $message = new Message($emitter->iterate(), $deferred->promise());
             $this->readEmitters[] = [$emitter, $message, $deferred];
         }
 
@@ -118,20 +119,18 @@ class Rfc6455Endpoint {
         return (bool) $this->closedAt;
     }
 
-    private function sendCloseFrame($code, $msg) {
+    private function sendCloseFrame(int $code, string $msg): Promise {
         $promise = $this->compile(pack('n', $code) . $msg, self::OP_CLOSE);
         $this->closedAt = \time();
+        $promise->onResolve(function () {
+            $this->socket->close();
+        });
         return $promise;
     }
 
     private function unloadServer() {
         $this->parser = null;
-        if ($this->readWatcher) {
-            Loop::cancel($this->readWatcher);
-        }
-        if ($this->writeWatcher) {
-            Loop::cancel($this->writeWatcher);
-        }
+        $this->socket->close();
 
         $exception = new ServerException("The connection was closed");
 
@@ -142,20 +141,10 @@ class Rfc6455Endpoint {
                 $emitter->fail($exception);
             }
         }
-
-        if ($this->writeBuffer != "") {
-            $this->writeDeferred->fail($exception);
-        }
-        foreach ([$this->writeDeferredDataQueue, $this->writeDeferredControlQueue] as $deferreds) {
-            foreach ($deferreds as $deferred) {
-                $deferred->fail($exception);
-            }
-        }
     }
 
     private function onParsedControlFrame(int $opcode, string $data) {
-        // something went that wrong that we had to shutdown our readWatcher... if parser has anything left, we don't care!
-        if (!$this->readWatcher) {
+        if ($this->closedAt) {
             return;
         }
 
@@ -171,9 +160,6 @@ class Rfc6455Endpoint {
                     $code = current(unpack('S', substr($data, 0, 2)));
                     $reason = substr($data, 2);
 
-                    @stream_socket_shutdown($this->socket, STREAM_SHUT_RD);
-                    Loop::cancel($this->readWatcher);
-                    $this->readWatcher = null;
                     $this->close($code, $reason);
                 }
                 break;
@@ -204,7 +190,7 @@ class Rfc6455Endpoint {
                 unset($this->readEmitters[\key($this->readEmitters)]);
             } else {
                 $this->msgEmitter = new Emitter;
-                $msg = new Message($this->msgEmitter->stream(), new Success($binary));
+                $msg = new Message($this->msgEmitter->iterate(), new Success($binary));
                 $this->readQueue[] = $msg;
             }
         }
@@ -213,85 +199,39 @@ class Rfc6455Endpoint {
         if ($terminated) {
             $msgEmitter = $this->msgEmitter;
             $this->msgEmitter = null;
-            $msgEmitter->resolve();
+            $msgEmitter->complete();
             ++$this->messagesRead;
         }
     }
 
     private function onParsedError(int $code, string $msg) {
-        // something went that wrong that we had to shutdown our readWatcher... if parser has anything left, we don't care!
-        if (!$this->readWatcher) {
+        if ($this->closedAt) {
             return;
         }
 
-        if ($code) {
-            if ($this->closedAt || $code == Code::PROTOCOL_ERROR) {
-                @stream_socket_shutdown($this->socket, STREAM_SHUT_RD);
-                Loop::cancel($this->readWatcher);
-                $this->readWatcher = null;
-            }
-
-            if (!$this->closedAt) {
-                $this->close($code, $msg);
-            }
-        }
+        $this->close($code, $msg);
     }
 
-    public function onReadable($watcherId, $socket) {
-        $data = @\fread($socket, 8192);
-
-        if ($data !== "") {
-            $this->lastReadAt = \time();
-            $this->bytesRead += \strlen($data);
-            $this->framesRead += $this->parser->send($data);
-        } elseif (!is_resource($socket) || @feof($socket)) {
-            if (!$this->closedAt) {
-                $this->closedAt = \time();
-                $this->closeCode = Code::ABNORMAL_CLOSE;
-                $this->closeReason = "Client closed underlying TCP connection";
-            } else {
-                $this->closeTimeout = null;
+    public function read(): \Generator {
+        try {
+            while (($chunk = yield $this->socket->read()) !== null) {
+                $this->lastReadAt = \time();
+                $this->bytesRead += \strlen($chunk);
+                $this->framesRead += $this->parser->send($chunk);
             }
-
-            $this->unloadServer();
+        } catch (\Throwable $exception) {
+            // Fall through to marking connection closed below.
         }
-    }
 
-    public function onWritable($watcherId, $socket) {
-        $bytes = @fwrite($socket, $this->writeBuffer);
-        $this->bytesSent += $bytes;
-
-        if ($bytes != \strlen($this->writeBuffer)) {
-            $this->writeBuffer = substr($this->writeBuffer, $bytes);
-        } elseif ($bytes == 0 && $this->closedAt && (!is_resource($socket) || @feof($socket))) {
-            // usually read watcher cares about aborted TCP connections, but when
-            // $this->closedAt is true, it might be the case that read watcher
-            // is already cancelled and we need to ensure that our writing promise
-            // is fulfilled in unloadServer() with a failure
-            $this->closeTimeout = null;
-            $this->unloadServer();
+        if (!$this->closedAt) {
+            $this->closedAt = \time();
+            $this->closeCode = Code::ABNORMAL_CLOSE;
+            $this->closeReason = "Client closed underlying TCP connection";
         } else {
-            $this->framesSent++;
-            $this->writeDeferred->resolve();
-            if ($this->writeControlQueue) {
-                $this->writeBuffer = array_shift($this->writeControlQueue);
-                $this->lastSentAt = \time();
-                $this->writeDeferred = array_shift($this->writeDeferredControlQueue);
-            } elseif ($this->closedAt) {
-                @stream_socket_shutdown($socket, STREAM_SHUT_WR);
-                Loop::cancel($watcherId);
-                $this->writeWatcher = null;
-                $this->writeBuffer = "";
-            } elseif ($this->writeDataQueue) {
-                $this->writeBuffer = array_shift($this->writeDataQueue);
-                $this->lastDataSentAt = \time();
-                $this->lastSentAt = \time();
-                $this->writeDeferred = array_shift($this->writeDeferredDataQueue);
-            } else {
-                $this->writeBuffer = "";
-                Loop::disable($watcherId);
-            }
+            $this->closeTimeout = null;
         }
+
+        $this->unloadServer();
     }
 
     private function compile(string $msg, int $opcode, bool $fin = true): Promise {
@@ -318,26 +258,16 @@ class Rfc6455Endpoint {
             $w .= chr($len | 0x80);
         }
 
-        $mask = pack('N', mt_rand(-0x7fffffff - 1, 0x7fffffff)); // this is not a CSPRNG, but good enough for our use cases
+        $mask = pack('N', random_int(\PHP_INT_MIN, \PHP_INT_MAX));
 
         $w .= $mask;
         $w .= $msg ^ str_repeat($mask, ($len + 3) >> 2);
 
-        Loop::enable($this->writeWatcher);
-        if ($this->writeBuffer != "") {
-            if ($opcode >= 0x8) {
-                $this->writeControlQueue[] = $w;
-                $deferred = $this->writeDeferredControlQueue[] = new Deferred;
-            } else {
-                $this->writeDataQueue[] = $w;
-                $deferred = $this->writeDeferredDataQueue[] = new Deferred;
-            }
-        } else {
-            $this->writeBuffer = $w;
-            $deferred = $this->writeDeferred = new Deferred;
-        }
+        ++$this->framesSent;
+        $this->bytesSent += \strlen($w);
+        $this->lastSentAt = \time();
 
-        return $deferred->promise();
+        return $this->socket->write($w);
     }
 
     public function send(string $data, bool $binary = false): Promise {
@@ -356,6 +286,7 @@ class Rfc6455Endpoint {
                 $opcode = self::OP_CONT;
             }
         }
+
         return $this->compile($data, $opcode);
     }
 
@@ -455,34 +386,48 @@ class Rfc6455Endpoint {
 
                 if (PHP_INT_MAX === 0x7fffffff) {
                     if ($lengthLong32Pair[1] !== 0 || $lengthLong32Pair[2] < 0) {
-                        $code = Code::MESSAGE_TOO_LARGE;
-                        $errorMsg = 'Payload exceeds maximum allowable size';
-                        break;
+                        $endpoint->onParsedError(
+                            Code::MESSAGE_TOO_LARGE,
+                            'Payload exceeds maximum allowable size'
+                        );
+                        return;
                     }
                     $frameLength = $lengthLong32Pair[2];
                 } else {
                     $frameLength = ($lengthLong32Pair[1] << 32) | $lengthLong32Pair[2];
                     if ($frameLength < 0) {
-                        $code = Code::PROTOCOL_ERROR;
-                        $errorMsg = 'Most significant bit of 64-bit length field set';
-                        break;
+                        $endpoint->onParsedError(
+                            Code::PROTOCOL_ERROR,
+                            'Most significant bit of 64-bit length field set'
+                        );
+                        return;
                     }
                 }
             }
 
             if ($isMasked) {
-                $code = Code::PROTOCOL_ERROR;
-                $errorMsg = 'Payload must not be masked to client';
-                break;
-            } elseif ($isControlFrame) {
+                $endpoint->onParsedError(
+                    Code::PROTOCOL_ERROR,
+                    'Payload must not be masked to client'
+                );
+                return;
+            }
+
+            if ($isControlFrame) {
                 if (!$fin) {
-                    $code = Code::PROTOCOL_ERROR;
-                    $errorMsg = 'Illegal control frame fragmentation';
-                    break;
-                } elseif ($frameLength > 125) {
-                    $code = Code::PROTOCOL_ERROR;
-                    $errorMsg = 'Control frame payload must be of maximum 125 bytes or less';
-                    break;
+                    $endpoint->onParsedError(
+                        Code::PROTOCOL_ERROR,
+                        'Illegal control frame fragmentation'
+                    );
+                    return;
+                }
+
+                if ($frameLength > 125) {
+                    $endpoint->onParsedError(
+                        Code::PROTOCOL_ERROR,
+                        'Control frame payload must be of maximum 125 bytes or less'
+                    );
+                    return;
                 }
             } elseif (($opcode === 0x00) === ($dataMsgBytesRecd === 0)) {
                 // We deliberately do not accept a non-fin empty initial text frame
@@ -492,19 +437,32 @@ class Rfc6455Endpoint {
                 } else {
                     $errorMsg = 'Illegal data type opcode after unfinished previous data type frame; opcode MUST be CONTINUATION';
                 }
-                break;
-            } elseif ($maxFrameSize && $frameLength > $maxFrameSize) {
-                $code = Code::MESSAGE_TOO_LARGE;
-                $errorMsg = 'Payload exceeds maximum allowable frame size';
-                break;
-            } elseif ($maxMsgSize && ($frameLength + $dataMsgBytesRecd) > $maxMsgSize) {
-                $code = Code::MESSAGE_TOO_LARGE;
-                $errorMsg = 'Payload exceeds maximum allowable message size';
-                break;
-            } elseif ($textOnly && $opcode === 0x02) {
-                $code = Code::UNACCEPTABLE_TYPE;
-                $errorMsg = 'BINARY opcodes (0x02) not accepted';
-                break;
+                $endpoint->onParsedError($code, $errorMsg);
+                return;
+            }
+
+            if ($maxFrameSize && $frameLength > $maxFrameSize) {
+                $endpoint->onParsedError(
+                    Code::MESSAGE_TOO_LARGE,
+                    'Payload exceeds maximum allowable size'
+                );
+                return;
+            }
+
+            if ($maxMsgSize && ($frameLength + $dataMsgBytesRecd) > $maxMsgSize) {
+                $endpoint->onParsedError(
+                    Code::MESSAGE_TOO_LARGE,
+                    'Payload exceeds maximum allowable size'
+                );
+                return;
+            }
+
+            if ($textOnly && $opcode === 0x02) {
+                $endpoint->onParsedError(
+                    Code::UNACCEPTABLE_TYPE,
+                    'BINARY opcodes (0x02) not accepted'
+                );
+                return;
             }
 
             if ($bufferSize >= $frameLength) {
@@ -546,9 +504,11 @@ class Rfc6455Endpoint {
                                 $payload = substr($payload, 0, -1);
                             }
                             if ($i === 8) {
-                                $code = Code::INCONSISTENT_FRAME_DATA_TYPE;
-                                $errorMsg = 'Invalid TEXT data; UTF-8 required';
-                                break 2;
+                                $endpoint->onParsedError(
+                                    Code::INCONSISTENT_FRAME_DATA_TYPE,
+                                    'Invalid TEXT data; UTF-8 required'
+                                );
+                                return;
                             }
 
                             $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
@@ -608,9 +568,11 @@ class Rfc6455Endpoint {
                             }
                         }
                         if ($i === 8) {
-                            $code = Code::INCONSISTENT_FRAME_DATA_TYPE;
-                            $errorMsg = 'Invalid TEXT data; UTF-8 required';
-                            break;
+                            $endpoint->onParsedError(
+                                Code::INCONSISTENT_FRAME_DATA_TYPE,
+                                'Invalid TEXT data; UTF-8 required'
+                            );
+                            return;
                         }
                     }
 
@@ -626,15 +588,6 @@ class Rfc6455Endpoint {
             }
 
             $frames++;
-        }
-
-        // An error occurred...
-        // stop parsing here ...
-        $endpoint->onParsedError($code, $errorMsg);
-        yield $frames;
-        
-        while (1) {
-            yield 0;
         }
     }
 }
