@@ -5,11 +5,11 @@ namespace Amp\Websocket;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Emitter;
-use Amp\Failure;
 use Amp\Loop;
 use Amp\Promise;
 use Amp\Socket\Socket;
 use Amp\Success;
+use function Amp\call;
 
 class Rfc6455Endpoint {
     public $autoFrameSize = 32768;
@@ -120,7 +120,7 @@ class Rfc6455Endpoint {
     }
 
     private function sendCloseFrame(int $code, string $msg): Promise {
-        $promise = $this->compile(pack('n', $code) . $msg, self::OP_CLOSE);
+        $promise = $this->write(pack('n', $code) . $msg, self::OP_CLOSE);
         $this->closedAt = \time();
         $promise->onResolve(function () {
             $this->socket->close();
@@ -165,7 +165,7 @@ class Rfc6455Endpoint {
                 break;
 
             case self::OP_PING:
-                $this->compile($data, self::OP_PONG);
+                $this->write($data, self::OP_PONG);
                 break;
 
             case self::OP_PONG:
@@ -234,18 +234,8 @@ class Rfc6455Endpoint {
         $this->unloadServer();
     }
 
-    private function compile(string $msg, int $opcode, bool $fin = true): Promise {
-        $rsv = 0b000;
-
-        // @TODO Add filter mechanism (e.g. for gzip encoding)
-
-        return $this->write($msg, $opcode, $rsv, $fin);
-    }
-
-    private function write(string $msg, int $opcode, int $rsv, bool $fin): Promise {
-        if ($this->closedAt) {
-            return new Failure(new ServerException("The connection has been closed"));
-        }
+    private function compile(string $msg, int $opcode, bool $fin): string {
+        $rsv = 0b000; // @TODO Add filter mechanism (e.g. for gzip encoding)
 
         $len = \strlen($msg);
         $w = chr(($fin << 7) | ($rsv << 4) | $opcode);
@@ -263,11 +253,17 @@ class Rfc6455Endpoint {
         $w .= $mask;
         $w .= $msg ^ str_repeat($mask, ($len + 3) >> 2);
 
+        return $w;
+    }
+
+    private function write(string $msg, int $opcode, bool $fin = true): Promise {
+        $frame = $this->compile($msg, $opcode, $fin);
+
         ++$this->framesSent;
-        $this->bytesSent += \strlen($w);
+        $this->bytesSent += \strlen($frame);
         $this->lastSentAt = \time();
 
-        return $this->socket->write($w);
+        return $this->socket->write($frame);
     }
 
     public function send(string $data, bool $binary = false): Promise {
@@ -278,16 +274,22 @@ class Rfc6455Endpoint {
 
         if (\strlen($data) > 1.5 * $this->autoFrameSize) {
             $len = \strlen($data);
-            $slices = ceil($len / $this->autoFrameSize);
-            $frames = str_split($data, ceil($len / $slices));
-            $data = array_pop($frames);
-            foreach ($frames as $frame) {
-                $this->compile($frame, $opcode, false);
-                $opcode = self::OP_CONT;
-            }
+            $slices = \ceil($len / $this->autoFrameSize);
+            $chunks = \str_split($data, \ceil($len / $slices));
+
+            return call(function () use ($chunks, $opcode) {
+                $bytes = 0;
+                $final = \array_pop($chunks);
+                foreach ($chunks as $chunk) {
+                    $bytes += yield $this->write($chunk, $opcode, false);
+                    $opcode = self::OP_CONT;
+                }
+                $bytes += yield $this->write($final, $opcode, true);
+                return $bytes;
+            });
         }
 
-        return $this->compile($data, $opcode);
+        return $this->write($data, $opcode);
     }
 
     public function sendBinary(string $data): Promise {
