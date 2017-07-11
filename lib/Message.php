@@ -2,16 +2,15 @@
 
 namespace Amp\Websocket;
 
-use Amp\ByteStream\IteratorStream;
-use Amp\Iterator;
+use Amp\ByteStream\InputStream;
 use Amp\Promise;
 
 class Message extends \Amp\ByteStream\Message {
     /** @var \Amp\Promise */
     private $binary;
 
-    public function __construct(Iterator $iterator, Promise $binary) {
-        parent::__construct(new IteratorStream($iterator));
+    public function __construct(InputStream $stream, Promise $binary) {
+        parent::__construct($stream);
         $this->binary = $binary;
     }
 

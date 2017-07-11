@@ -2,6 +2,7 @@
 
 namespace Amp\Websocket;
 
+use Amp\ByteStream\IteratorStream;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Emitter;
@@ -104,7 +105,7 @@ class Rfc6455Endpoint {
         } else {
             $emitter = new Emitter;
             $deferred = new Deferred;
-            $message = new Message($emitter->iterate(), $deferred->promise());
+            $message = new Message(new IteratorStream($emitter->iterate()), $deferred->promise());
             $this->readEmitters[] = [$emitter, $message, $deferred];
         }
 
@@ -190,7 +191,7 @@ class Rfc6455Endpoint {
                 unset($this->readEmitters[\key($this->readEmitters)]);
             } else {
                 $this->msgEmitter = new Emitter;
-                $msg = new Message($this->msgEmitter->iterate(), new Success($binary));
+                $msg = new Message(new IteratorStream($this->msgEmitter->iterate()), new Success($binary));
                 $this->readQueue[] = $msg;
             }
         }
