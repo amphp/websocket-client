@@ -214,14 +214,10 @@ class Rfc6455Endpoint {
     }
 
     public function read(): \Generator {
-        try {
-            while (($chunk = yield $this->socket->read()) !== null) {
-                $this->lastReadAt = \time();
-                $this->bytesRead += \strlen($chunk);
-                $this->framesRead += $this->parser->send($chunk);
-            }
-        } catch (\Throwable $exception) {
-            // Fall through to marking connection closed below.
+        while (($chunk = yield $this->socket->read()) !== null) {
+            $this->lastReadAt = \time();
+            $this->bytesRead += \strlen($chunk);
+            $this->framesRead += $this->parser->send($chunk);
         }
 
         if (!$this->closedAt) {
