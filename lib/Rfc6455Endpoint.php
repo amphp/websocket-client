@@ -23,17 +23,31 @@ class Rfc6455Endpoint {
     public $queuedPingLimit = 3;
     // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
 
+    /** @var \Amp\Socket\Socket */
     private $socket;
+
+    /** @var \Generator */
     private $parser;
 
     public $pingCount = 0;
     public $pongCount = 0;
 
+    /** @var \Amp\Websocket\Message[] */
     private $readQueue = [];
+
+    /** @var \Amp\Emitter[] */
     private $readEmitters = [];
+
+    /** @var \Amp\Emitter */
     private $msgEmitter;
 
+    /** @var \Amp\Promise|null */
+    private $lastWrite;
+
+    /** @var int */
     private $closeTimeout;
+
+    /** @var string */
     private $timeoutWatcher;
 
     // getInfo() properties
@@ -269,24 +283,41 @@ class Rfc6455Endpoint {
         $opcode = $binary ? self::OP_BIN : self::OP_TEXT;
         assert($binary || preg_match("//u", $data), "non-binary data needs to be UTF-8 compatible");
 
-        if (\strlen($data) > 1.5 * $this->autoFrameSize) {
-            $len = \strlen($data);
-            $slices = \ceil($len / $this->autoFrameSize);
-            $chunks = \str_split($data, \ceil($len / $slices));
+        return new Coroutine($this->doSend($data, $opcode));
+    }
 
-            return call(function () use ($chunks, $opcode) {
+    private function doSend(string $data, int $opcode): \Generator {
+        while ($this->lastWrite !== null) {
+            yield $this->lastWrite;
+        }
+
+        if (\strlen($data) > 1.5 * $this->autoFrameSize) {
+            $this->lastWrite = call(function () use ($data, $opcode) {
                 $bytes = 0;
+                $len = \strlen($data);
+                $slices = \ceil($len / $this->autoFrameSize);
+                $chunks = \str_split($data, \ceil($len / $slices));
                 $final = \array_pop($chunks);
                 foreach ($chunks as $chunk) {
                     $bytes += yield $this->write($chunk, $opcode, false);
                     $opcode = self::OP_CONT;
                 }
-                $bytes += yield $this->write($final, $opcode, true);
-                return $bytes;
+                return $bytes + yield $this->write($final, $opcode, true);
             });
+        } else {
+            $this->lastWrite = $this->write($data, $opcode);
         }
 
-        return $this->write($data, $opcode);
+        try {
+            $bytes = yield $this->lastWrite;
+        } catch (\Throwable $exception) {
+            $this->close();
+            throw $exception;
+        } finally {
+            $this->lastWrite = null;
+        }
+
+        return $bytes;
     }
 
     public function sendBinary(string $data): Promise {
