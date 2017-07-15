@@ -51,20 +51,20 @@ class Rfc6455Endpoint {
     private $timeoutWatcher;
 
     // getInfo() properties
-    public $connectedAt;
-    public $closedAt = 0;
-    public $lastReadAt = 0;
-    public $lastSentAt = 0;
-    public $lastDataReadAt = 0;
-    public $lastDataSentAt = 0;
-    public $bytesRead = 0;
-    public $bytesSent = 0;
-    public $framesRead = 0;
-    public $framesSent = 0;
-    public $messagesRead = 0;
-    public $messagesSent = 0;
-    public $closeCode;
-    public $closeReason;
+    private $connectedAt;
+    private $closedAt = 0;
+    private $lastReadAt = 0;
+    private $lastSentAt = 0;
+    private $lastDataReadAt = 0;
+    private $lastDataSentAt = 0;
+    private $bytesRead = 0;
+    private $bytesSent = 0;
+    private $framesRead = 0;
+    private $framesSent = 0;
+    private $messagesRead = 0;
+    private $messagesSent = 0;
+    private $closeCode;
+    private $closeReason;
     
     /* Frame control bits */
     const FIN      = 0b1;
@@ -331,6 +331,52 @@ class Rfc6455Endpoint {
             $this->unloadServer();
             $this->closeTimeout = null;
         }
+    }
+
+    public function setOption(string $option, $value) {
+        switch ($option) {
+            case "maxBytesPerMinute":
+                if (8192 > $value) {
+                    throw new \Error("$option must be at least 8192 bytes");
+                }
+            case "autoFrameSize":
+            case "maxFrameSize":
+            case "maxFramesPerSecond":
+            case "maxMsgSize":
+            case "heartbeatPeriod":
+            case "closePeriod":
+            case "queuedPingLimit":
+                if (0 <= $value = filter_var($value, FILTER_VALIDATE_INT)) {
+                    throw new \Error("$option must be a positive integer greater than 0");
+                }
+                break;
+            case "validateUtf8":
+            case "textOnly":
+                if (null === $value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) {
+                    throw new \Error("$option must be a boolean value");
+                }
+                break;
+            default:
+                throw new \Error("Unknown option $option");
+        }
+        $this->{$option} = $value;
+    }
+
+    public function getInfo(): array {
+        return [
+            'bytes_read'    => $this->bytesRead,
+            'bytes_sent'    => $this->bytesSent,
+            'frames_read'   => $this->framesRead,
+            'frames_sent'   => $this->framesSent,
+            'messages_read' => $this->messagesRead,
+            'messages_sent' => $this->messagesSent,
+            'connected_at'  => $this->connectedAt,
+            'closed_at'     => $this->closedAt,
+            'last_read_at'  => $this->lastReadAt,
+            'last_sent_at'  => $this->lastSentAt,
+            'last_data_read_at'  => $this->lastDataReadAt,
+            'last_data_sent_at'  => $this->lastDataSentAt,
+        ];
     }
 
     /**
