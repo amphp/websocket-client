@@ -10,7 +10,6 @@ use Amp\Loop;
 use Amp\Promise;
 use Amp\Socket\Socket;
 use Amp\Success;
-use function Amp\call;
 
 class Rfc6455Endpoint {
     public $autoFrameSize = 32768;
@@ -283,17 +282,18 @@ class Rfc6455Endpoint {
         $opcode = $binary ? self::OP_BIN : self::OP_TEXT;
         assert($binary || preg_match("//u", $data), "non-binary data needs to be UTF-8 compatible");
 
-        return new Coroutine($this->doSend($data, $opcode));
+        return $this->lastWrite = new Coroutine($this->doSend($data, $opcode));
     }
 
     private function doSend(string $data, int $opcode): \Generator {
-        while ($this->lastWrite !== null) {
+        if ($this->lastWrite) {
             yield $this->lastWrite;
         }
 
-        if (\strlen($data) > 1.5 * $this->autoFrameSize) {
-            $this->lastWrite = call(function () use ($data, $opcode) {
-                $bytes = 0;
+        try {
+            $bytes = 0;
+
+            if (\strlen($data) > 1.5 * $this->autoFrameSize) {
                 $len = \strlen($data);
                 $slices = \ceil($len / $this->autoFrameSize);
                 $chunks = \str_split($data, \ceil($len / $slices));
@@ -302,14 +302,10 @@ class Rfc6455Endpoint {
                     $bytes += yield $this->write($chunk, $opcode, false);
                     $opcode = self::OP_CONT;
                 }
-                return $bytes + yield $this->write($final, $opcode, true);
-            });
-        } else {
-            $this->lastWrite = $this->write($data, $opcode);
-        }
-
-        try {
-            $bytes = yield $this->lastWrite;
+                $bytes += yield $this->write($final, $opcode, true);
+            } else {
+                $bytes = yield $this->write($data, $opcode);
+            }
         } catch (\Throwable $exception) {
             $this->close();
             throw $exception;
