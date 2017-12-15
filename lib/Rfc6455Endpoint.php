@@ -84,11 +84,7 @@ final class Rfc6455Endpoint implements Endpoint {
     const CONTROL = -1;
     const ERROR = -2;
 
-    public function __construct(Socket $socket, array $headers, string $buffer, array $options = []) {
-        if (!$headers) {
-            throw new WebSocketException;
-        }
-
+    public function __construct(Socket $socket, string $buffer, array $options = []) {
         $this->timeoutWatcher = Loop::repeat(1000, function () {
             $now = \time();
 

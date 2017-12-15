@@ -65,7 +65,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
 
                 // TODO: validate headers...
 
-                return new Rfc6455Endpoint($socket, $headers, $buffer, $options);
+                return new Rfc6455Endpoint($socket, $buffer, $options);
             }
         }
 
