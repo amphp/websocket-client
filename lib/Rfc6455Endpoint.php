@@ -3,15 +3,17 @@
 namespace Amp\Websocket;
 
 use Amp\ByteStream\IteratorStream;
+use Amp\CallableMaker;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Emitter;
 use Amp\Loop;
 use Amp\Promise;
 use Amp\Socket\Socket;
-use Amp\Success;
 
-class Rfc6455Endpoint {
+final class Rfc6455Endpoint implements Endpoint {
+    use CallableMaker;
+
     public $autoFrameSize = 32768;
     public $maxFrameSize = 2097152;
     public $maxMsgSize = 10485760;
@@ -22,7 +24,7 @@ class Rfc6455Endpoint {
     public $queuedPingLimit = 3;
     // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
 
-    /** @var \Amp\Socket\Socket */
+    /** @var Socket */
     private $socket;
 
     /** @var \Generator */
@@ -31,16 +33,16 @@ class Rfc6455Endpoint {
     public $pingCount = 0;
     public $pongCount = 0;
 
-    /** @var \Amp\Websocket\Message[] */
-    private $readQueue = [];
+    /** @var Emitter */
+    private $currentMessageEmitter;
 
-    /** @var \Amp\Emitter[] */
-    private $readEmitters = [];
+    /** @var Message[] */
+    private $messages = [];
 
-    /** @var \Amp\Emitter */
-    private $msgEmitter;
+    /** @var Deferred */
+    private $nextMessageDeferred;
 
-    /** @var \Amp\Promise|null */
+    /** @var Promise|null */
     private $lastWrite;
 
     /** @var int */
@@ -66,14 +68,14 @@ class Rfc6455Endpoint {
     private $closeReason;
 
     /* Frame control bits */
-    const FIN      = 0b1;
+    const FIN = 0b1;
     const RSV_NONE = 0b000;
-    const OP_CONT  = 0x00;
-    const OP_TEXT  = 0x01;
-    const OP_BIN   = 0x02;
+    const OP_CONT = 0x00;
+    const OP_TEXT = 0x01;
+    const OP_BIN = 0x02;
     const OP_CLOSE = 0x08;
-    const OP_PING  = 0x09;
-    const OP_PONG  = 0x0A;
+    const OP_PING = 0x09;
+    const OP_PONG = 0x0A;
 
     const CONTROL = -1;
     const ERROR = -2;
@@ -82,17 +84,31 @@ class Rfc6455Endpoint {
         if (!$headers) {
             throw new ServerException;
         }
-        $this->timeoutWatcher = Loop::repeat(1000, [$this, "timeout"]);
+
+        $this->timeoutWatcher = Loop::repeat(1000, function () {
+            $now = \time();
+
+            if ($this->closeTimeout < $now && $this->closedAt) {
+                $this->unloadServer();
+                $this->closeTimeout = null;
+            }
+        });
+
         Loop::unreference($this->timeoutWatcher);
+
         $this->connectedAt = \time();
         $this->socket = $socket;
         $this->parser = self::parser($this, $options);
 
-        if ($buffer !== "") {
+        if ($buffer !== '') {
             $this->framesRead += $this->parser->send($buffer);
         }
 
         Promise\rethrow(new Coroutine($this->read()));
+    }
+
+    public function __destruct() {
+        Loop::cancel($this->timeoutWatcher);
     }
 
     public function close(int $code = Code::NORMAL_CLOSE, string $reason = '') {
@@ -104,41 +120,40 @@ class Rfc6455Endpoint {
         $this->closeTimeout = \time() + $this->closePeriod;
         $this->closeCode = $code;
         $this->closeReason = $reason;
+
         $this->sendCloseFrame($code, $reason);
-        if ($this->msgEmitter) {
-            $this->msgEmitter->fail(new ServerException("The connection was closed"));
+
+        $exception = new ServerException('The connection was closed');
+
+        if ($this->currentMessageEmitter) {
+            $this->currentMessageEmitter->fail($exception);
         }
+
+        if ($this->nextMessageDeferred) {
+            $deferred = $this->nextMessageDeferred;
+            $this->nextMessageDeferred = null;
+            $deferred->fail($exception);
+        }
+
         // Don't unload the client here, it will be unloaded upon timeout
     }
 
-    public function pull(): Message {
-        if ($this->readQueue) {
-            $message = \reset($this->readQueue);
-            unset($this->readQueue[\key($this->readQueue)]);
-        } else {
-            $emitter = new Emitter;
-            $deferred = new Deferred;
-            $message = new Message(new IteratorStream($emitter->iterate()), $deferred->promise());
-            $this->readEmitters[] = [$emitter, $message, $deferred];
-        }
-
-        return $message;
-    }
-
     public function messageCount(): int {
-        return $this->messagesRead + \count($this->readEmitters) - \count($this->readQueue);
+        return $this->messagesRead;
     }
 
     public function isClosed(): bool {
         return (bool) $this->closedAt;
     }
 
-    private function sendCloseFrame(int $code, string $msg): Promise {
-        $promise = $this->write(\pack('n', $code) . $msg, self::OP_CLOSE);
-        $this->closedAt = \time();
+    private function sendCloseFrame(int $code, string $message): Promise {
+        $promise = $this->write(self::OP_CLOSE, \pack('n', $code) . $message);
         $promise->onResolve(function () {
             $this->socket->close();
         });
+
+        $this->closedAt = \time();
+
         return $promise;
     }
 
@@ -146,14 +161,11 @@ class Rfc6455Endpoint {
         $this->parser = null;
         $this->socket->close();
 
-        $exception = new ServerException("The connection was closed");
+        $exception = new ServerException('The connection was closed');
 
         // fail not yet terminated message streams; they *must not* be failed before client is removed
-        if ($this->msgEmitter) {
-            $this->msgEmitter->fail($exception);
-            foreach ($this->readEmitters as list($emitter)) {
-                $emitter->fail($exception);
-            }
+        if ($this->currentMessageEmitter) {
+            $this->currentMessageEmitter->fail($exception);
         }
     }
 
@@ -179,7 +191,7 @@ class Rfc6455Endpoint {
                 break;
 
             case self::OP_PING:
-                $this->write($data, self::OP_PONG);
+                $this->write(self::OP_PONG, $data);
                 break;
 
             case self::OP_PONG:
@@ -189,44 +201,51 @@ class Rfc6455Endpoint {
         }
     }
 
-    private function onParsedData(string $data, int $opcode, bool $terminated) {
+    private function onParsedData(int $opcode, string $data, bool $terminated) {
         if ($this->closedAt) {
             return;
         }
 
         $this->lastDataReadAt = \time();
 
-        if (!$this->msgEmitter) {
+        if (!$this->currentMessageEmitter) {
             $binary = $opcode === self::OP_BIN;
-            if ($this->readEmitters) {
-                list($this->msgEmitter, $msg, $binaryDeferred) = \reset($this->readEmitters);
-                $binaryDeferred->resolve($binary);
-                unset($this->readEmitters[\key($this->readEmitters)]);
-            } else {
-                $this->msgEmitter = new Emitter;
-                $msg = new Message(new IteratorStream($this->msgEmitter->iterate()), new Success($binary));
-                $this->readQueue[] = $msg;
+
+            $this->currentMessageEmitter = new Emitter;
+            $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
+
+            if ($this->nextMessageDeferred) {
+                if (\count($this->messages) > 1) {
+                    \reset($this->messages);
+                    unset($this->messages[\key($this->messages)]);
+                }
+
+                $deferred = $this->nextMessageDeferred;
+                $this->nextMessageDeferred = null;
+                $deferred->resolve(true);
             }
         }
 
-        $this->msgEmitter->emit($data);
+        $this->currentMessageEmitter->emit($data);
+
         if ($terminated) {
-            $msgEmitter = $this->msgEmitter;
-            $this->msgEmitter = null;
-            $msgEmitter->complete();
+            $emitter = $this->currentMessageEmitter;
+            $this->currentMessageEmitter = null;
+            $emitter->complete();
+
             ++$this->messagesRead;
         }
     }
 
-    private function onParsedError(int $code, string $msg) {
+    private function onParsedError(int $code, string $message) {
         if ($this->closedAt) {
             return;
         }
 
-        $this->close($code, $msg);
+        $this->close($code, $message);
     }
 
-    public function read(): \Generator {
+    private function read(): \Generator {
         while (($chunk = yield $this->socket->read()) !== null) {
             $this->lastReadAt = \time();
             $this->bytesRead += \strlen($chunk);
@@ -236,7 +255,7 @@ class Rfc6455Endpoint {
         if (!$this->closedAt) {
             $this->closedAt = \time();
             $this->closeCode = Code::ABNORMAL_CLOSE;
-            $this->closeReason = "Client closed underlying TCP connection";
+            $this->closeReason = 'Client closed the underlying TCP connection';
         } else {
             $this->closeTimeout = null;
         }
@@ -244,10 +263,10 @@ class Rfc6455Endpoint {
         $this->unloadServer();
     }
 
-    private function compile(string $msg, int $opcode, bool $fin): string {
+    private function compile(int $opcode, string $message, bool $fin): string {
         $rsv = 0b000; // @TODO Add filter mechanism (e.g. for gzip encoding)
 
-        $len = \strlen($msg);
+        $len = \strlen($message);
         $w = \chr(($fin << 7) | ($rsv << 4) | $opcode);
 
         if ($len > 0xFFFF) {
@@ -261,31 +280,36 @@ class Rfc6455Endpoint {
         $mask = \pack('N', \random_int(\PHP_INT_MIN, \PHP_INT_MAX));
 
         $w .= $mask;
-        $w .= $msg ^ \str_repeat($mask, ($len + 3) >> 2);
+        $w .= $message ^ \str_repeat($mask, ($len + 3) >> 2);
 
         return $w;
     }
 
-    private function write(string $msg, int $opcode, bool $fin = true): Promise {
-        $frame = $this->compile($msg, $opcode, $fin);
+    private function write(int $opcode, string $data, bool $terminated = true): Promise {
+        $frame = $this->compile($opcode, $data, $terminated);
 
-        ++$this->framesSent;
+        $this->framesSent++;
         $this->bytesSent += \strlen($frame);
         $this->lastSentAt = \time();
 
         return $this->socket->write($frame);
     }
 
-    public function send(string $data, bool $binary = false): Promise {
+    public function send(string $data): Promise {
         $this->messagesSent++;
 
-        $opcode = $binary ? self::OP_BIN : self::OP_TEXT;
-        \assert($binary || \preg_match("//u", $data), "non-binary data needs to be UTF-8 compatible");
+        \assert(\preg_match('//u', $data), 'non-binary data needs to be UTF-8 compatible');
 
-        return $this->lastWrite = new Coroutine($this->doSend($data, $opcode));
+        return $this->lastWrite = new Coroutine($this->doSend(self::OP_TEXT, $data));
     }
 
-    private function doSend(string $data, int $opcode): \Generator {
+    public function sendBinary(string $data): Promise {
+        $this->messagesSent++;
+
+        return $this->lastWrite = new Coroutine($this->doSend(self::OP_BIN, $data));
+    }
+
+    private function doSend(int $opcode, string $data): \Generator {
         if ($this->lastWrite) {
             yield $this->lastWrite;
         }
@@ -299,12 +323,12 @@ class Rfc6455Endpoint {
                 $chunks = \str_split($data, \ceil($len / $slices));
                 $final = \array_pop($chunks);
                 foreach ($chunks as $chunk) {
-                    $bytes += yield $this->write($chunk, $opcode, false);
+                    $bytes += yield $this->write($opcode, $chunk, false);
                     $opcode = self::OP_CONT;
                 }
-                $bytes += yield $this->write($final, $opcode, true);
+                $bytes += yield $this->write($opcode, $final);
             } else {
-                $bytes = yield $this->write($data, $opcode);
+                $bytes = yield $this->write($opcode, $data);
             }
         } catch (\Throwable $exception) {
             $this->close();
@@ -316,39 +340,53 @@ class Rfc6455Endpoint {
         return $bytes;
     }
 
-    public function sendBinary(string $data): Promise {
-        return $this->send($data, true);
+    /** @inheritdoc */
+    public function advance(): Promise {
+        if ($this->nextMessageDeferred) {
+            throw new \Error('Await the previous promise returned from advance() before calling advance() again');
+        }
+
+        $this->nextMessageDeferred = new Deferred;
+
+        return $this->nextMessageDeferred->promise();
     }
 
-    public function timeout() {
-        $now = \time();
-
-        if ($this->closeTimeout < $now && $this->closedAt) {
-            $this->unloadServer();
-            $this->closeTimeout = null;
+    /**
+     * Gets the last message.
+     *
+     * @return Message Message sent by the remote.
+     *
+     * @throws \Error If the promise returned from advance() resolved to false or didn't resolve yet.
+     * @throws ServerException If the connection closed.
+     */
+    public function getCurrent() {
+        if (\count($this->messages)) {
+            return \reset($this->messages);
         }
+
+        throw new \Error('Await the promise returned from advance() before calling getCurrent()');
     }
 
     public function setOption(string $option, $value) {
         switch ($option) {
-            case "maxBytesPerMinute":
+            case 'maxBytesPerMinute':
                 if (8192 > $value) {
                     throw new \Error("$option must be at least 8192 bytes");
                 }
-                // no break
-            case "autoFrameSize":
-            case "maxFrameSize":
-            case "maxFramesPerSecond":
-            case "maxMsgSize":
-            case "heartbeatPeriod":
-            case "closePeriod":
-            case "queuedPingLimit":
+            // no break
+            case 'autoFrameSize':
+            case 'maxFrameSize':
+            case 'maxFramesPerSecond':
+            case 'maxMsgSize':
+            case 'heartbeatPeriod':
+            case 'closePeriod':
+            case 'queuedPingLimit':
                 if (0 <= $value = \filter_var($value, FILTER_VALIDATE_INT)) {
                     throw new \Error("$option must be a positive integer greater than 0");
                 }
                 break;
-            case "validateUtf8":
-            case "textOnly":
+            case 'validateUtf8':
+            case 'textOnly':
                 if (null === $value = \filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) {
                     throw new \Error("$option must be a boolean value");
                 }
@@ -361,18 +399,18 @@ class Rfc6455Endpoint {
 
     public function getInfo(): array {
         return [
-            'bytes_read'    => $this->bytesRead,
-            'bytes_sent'    => $this->bytesSent,
-            'frames_read'   => $this->framesRead,
-            'frames_sent'   => $this->framesSent,
+            'bytes_read' => $this->bytesRead,
+            'bytes_sent' => $this->bytesSent,
+            'frames_read' => $this->framesRead,
+            'frames_sent' => $this->framesSent,
             'messages_read' => $this->messagesRead,
             'messages_sent' => $this->messagesSent,
-            'connected_at'  => $this->connectedAt,
-            'closed_at'     => $this->closedAt,
-            'last_read_at'  => $this->lastReadAt,
-            'last_sent_at'  => $this->lastSentAt,
-            'last_data_read_at'  => $this->lastDataReadAt,
-            'last_data_sent_at'  => $this->lastDataSentAt,
+            'connected_at' => $this->connectedAt,
+            'closed_at' => $this->closedAt,
+            'last_read_at' => $this->lastReadAt,
+            'last_sent_at' => $this->lastSentAt,
+            'last_data_read_at' => $this->lastDataReadAt,
+            'last_data_sent_at' => $this->lastDataSentAt,
         ];
     }
 
@@ -380,15 +418,16 @@ class Rfc6455Endpoint {
      * A stateful generator websocket frame parser.
      *
      * @param \Amp\Websocket\Rfc6455Endpoint $endpoint Endpoint to receive parser event emissions
-     * @param array $options Optional parser settings
+     * @param array                          $options Optional parser settings
+     *
      * @return \Generator
      */
     private static function parser(self $endpoint, array $options = []): \Generator {
-        $emitThreshold = $options["threshold"] ?? 32768;
-        $maxFrameSize = $options["max_frame_size"] ?? PHP_INT_MAX;
-        $maxMsgSize = $options["max_msg_size"] ?? PHP_INT_MAX;
-        $textOnly = $options["text_only"] ?? false;
-        $doUtf8Validation = $validateUtf8 = $options["validate_utf8"] ?? false;
+        $emitThreshold = $options['threshold'] ?? 32768;
+        $maxFrameSize = $options['max_frame_size'] ?? PHP_INT_MAX;
+        $maxMsgSize = $options['max_msg_size'] ?? PHP_INT_MAX;
+        $textOnly = $options['text_only'] ?? false;
+        $doUtf8Validation = $validateUtf8 = $options['validate_utf8'] ?? false;
 
         $dataMsgBytesRecd = 0;
         $nextEmit = $emitThreshold;
@@ -584,10 +623,10 @@ class Rfc6455Endpoint {
                                 return;
                             }
 
-                            $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
+                            $endpoint->onParsedData(self::OP_BIN, $payload, false);
                             $payload = $i > 0 ? \substr($string, -$i) : '';
                         } else {
-                            $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
+                            $endpoint->onParsedData(self::OP_BIN, $payload, false);
                             $payload = '';
                         }
 
@@ -654,7 +693,7 @@ class Rfc6455Endpoint {
                     }
                     $nextEmit = $dataMsgBytesRecd + $emitThreshold;
 
-                    $endpoint->onParsedData($payload, $opcode === self::OP_BIN, $fin);
+                    $endpoint->onParsedData(self::OP_BIN, $payload, $fin);
                 }
             } else {
                 $dataArr[] = $payload;

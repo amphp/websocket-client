@@ -46,8 +46,9 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
                 $headerBuffer = \substr($buffer, 0, $position + 4);
                 $buffer = \substr($buffer, $position + 4);
 
-                if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n")))) {
-                    throw new ServerException('Did not receive switching protocols response');
+                $startLine = \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n"));
+                if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", $startLine)) {
+                    throw new ServerException('Did not receive switching protocols response: ' . $startLine);
                 }
 
                 \preg_match_all("(
@@ -64,7 +65,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
 
                 // TODO: validate headers...
 
-                return new Rfc6455Connection($socket, $headers, $buffer, $options);
+                return new Rfc6455Endpoint($socket, $headers, $buffer, $options);
             }
         }
 
