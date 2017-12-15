@@ -1,39 +1,43 @@
 {
-  "name": "amphp/websocket",
-  "description": "Async WebSocket client for PHP based on Amp.",
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "Bob Weinand",
-      "email": "bobwei9@hotmail.com"
-    }
-  ],
-  "support": {
-    "issues": "https://github.com/amphp/websocket/issues"
-  },
-  "keywords": [
-    "async",
-    "non-blocking",
-    "websocket",
-    "client",
-    "http",
-    "amp",
-    "amphp"
-  ],
-  "require": {
-    "php": ">=7",
-    "amphp/amp": "^2",
-    "amphp/byte-stream": "^1",
-    "amphp/socket": "^0.10"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "^6",
-    "friendsofphp/php-cs-fixer": "^2.9"
-  },
-  "autoload": {
-    "psr-4": {
-      "Amp\\Websocket\\": "lib"
+    "name": "amphp/websocket",
+    "description": "Async WebSocket client for PHP based on Amp.",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Bob Weinand",
+            "email": "bobwei9@hotmail.com"
+        },
+        {
+            "name": "Aaron Piotrowski",
+            "email": "aaron@trowski.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/amphp/websocket/issues"
     },
-    "files": ["lib/functions.php"]
-  }
+    "keywords": [
+        "async",
+        "non-blocking",
+        "websocket",
+        "client",
+        "http",
+        "amp",
+        "amphp"
+    ],
+    "require": {
+        "php": ">=7",
+        "amphp/amp": "^2",
+        "amphp/byte-stream": "^1",
+        "amphp/socket": "^0.10"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^6",
+        "friendsofphp/php-cs-fixer": "^2.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amp\\Websocket\\": "lib"
+        },
+        "files": ["lib/functions.php"]
+    }
 }
