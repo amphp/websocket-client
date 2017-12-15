@@ -23,7 +23,7 @@ class Handshake {
     public function __construct(string $url, array $options = []) {
         $this->options = $options;
         
-        $url = parse_url($url);
+        $url = \parse_url($url);
         $this->crypto = $url["scheme"] == "wss";
         $host = $this->target = $url["host"];
         if (isset($url["port"])) {
@@ -65,7 +65,7 @@ class Handshake {
         foreach ($this->headers as $field => $value) {
             $headers .= "$field: $value\r\n";
         }
-        $accept = base64_encode(random_bytes(self::ACCEPT_NONCE_LENGTH));
+        $accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
         return "GET $this->path HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
     }
 
@@ -92,16 +92,16 @@ class Handshake {
     }
 
     private function createConnection($socket, string $data, string $buffer): Connection {
-        if (!preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", substr($data, 0, strpos($data, "\r\n")))) {
+        if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", \substr($data, 0, \strpos($data, "\r\n")))) {
             throw new ServerException("Did not receive switching protocols response");
         }
-        preg_match_all("(
+        \preg_match_all("(
             (?P<field>[^()<>@,;:\\\"/[\\]?={}\x01-\x20\x7F]+):[\x20\x09]*
             (?P<value>[^\x01-\x08\x0A-\x1F\x7F]*)[\x0D]?[\x20\x09]*[\r]?[\n]
         )x", $data, $m);
         $headers = [];
         foreach ($m["field"] as $idx => $field) {
-            $headers[strtolower($field)][] = $m["value"][$idx];
+            $headers[\strtolower($field)][] = $m["value"][$idx];
         }
         // TODO: validate headers...
         return new Rfc6455Connection($socket, $headers, $buffer, $this->options);

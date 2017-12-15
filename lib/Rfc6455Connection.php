@@ -52,7 +52,8 @@ class Rfc6455Connection implements Connection {
         return !$this->processor->isClosed();
     }
 
-    public function rewind() { }
+    public function rewind() {
+    }
 
     public function __destruct() {
         $this->processor->close(Code::NORMAL_CLOSE, "");

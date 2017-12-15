@@ -64,7 +64,7 @@ class Rfc6455Endpoint {
     private $messagesSent = 0;
     private $closeCode;
     private $closeReason;
-    
+
     /* Frame control bits */
     const FIN      = 0b1;
     const RSV_NONE = 0b000;
@@ -134,7 +134,7 @@ class Rfc6455Endpoint {
     }
 
     private function sendCloseFrame(int $code, string $msg): Promise {
-        $promise = $this->write(pack('n', $code) . $msg, self::OP_CLOSE);
+        $promise = $this->write(\pack('n', $code) . $msg, self::OP_CLOSE);
         $this->closedAt = \time();
         $promise->onResolve(function () {
             $this->socket->close();
@@ -171,8 +171,8 @@ class Rfc6455Endpoint {
                     if (\strlen($data) < 2) {
                         return; // invalid close reason
                     }
-                    $code = current(unpack('S', substr($data, 0, 2)));
-                    $reason = substr($data, 2);
+                    $code = \current(\unpack('S', \substr($data, 0, 2)));
+                    $reason = \substr($data, 2);
 
                     $this->close($code, $reason);
                 }
@@ -184,7 +184,7 @@ class Rfc6455Endpoint {
 
             case self::OP_PONG:
                 // We need a min() here, else someone might just send a pong frame with a very high pong count and leave TCP connection in open state...
-                $this->pongCount = min($this->pingCount, $data);
+                $this->pongCount = \min($this->pingCount, $data);
                 break;
         }
     }
@@ -248,20 +248,20 @@ class Rfc6455Endpoint {
         $rsv = 0b000; // @TODO Add filter mechanism (e.g. for gzip encoding)
 
         $len = \strlen($msg);
-        $w = chr(($fin << 7) | ($rsv << 4) | $opcode);
+        $w = \chr(($fin << 7) | ($rsv << 4) | $opcode);
 
         if ($len > 0xFFFF) {
-            $w .= "\xFF" . pack('J', $len);
+            $w .= "\xFF" . \pack('J', $len);
         } elseif ($len > 0x7D) {
-            $w .= "\xFE" . pack('n', $len);
+            $w .= "\xFE" . \pack('n', $len);
         } else {
-            $w .= chr($len | 0x80);
+            $w .= \chr($len | 0x80);
         }
 
-        $mask = pack('N', random_int(\PHP_INT_MIN, \PHP_INT_MAX));
+        $mask = \pack('N', \random_int(\PHP_INT_MIN, \PHP_INT_MAX));
 
         $w .= $mask;
-        $w .= $msg ^ str_repeat($mask, ($len + 3) >> 2);
+        $w .= $msg ^ \str_repeat($mask, ($len + 3) >> 2);
 
         return $w;
     }
@@ -280,7 +280,7 @@ class Rfc6455Endpoint {
         $this->messagesSent++;
 
         $opcode = $binary ? self::OP_BIN : self::OP_TEXT;
-        assert($binary || preg_match("//u", $data), "non-binary data needs to be UTF-8 compatible");
+        \assert($binary || \preg_match("//u", $data), "non-binary data needs to be UTF-8 compatible");
 
         return $this->lastWrite = new Coroutine($this->doSend($data, $opcode));
     }
@@ -335,6 +335,7 @@ class Rfc6455Endpoint {
                 if (8192 > $value) {
                     throw new \Error("$option must be at least 8192 bytes");
                 }
+                // no break
             case "autoFrameSize":
             case "maxFrameSize":
             case "maxFramesPerSecond":
@@ -342,13 +343,13 @@ class Rfc6455Endpoint {
             case "heartbeatPeriod":
             case "closePeriod":
             case "queuedPingLimit":
-                if (0 <= $value = filter_var($value, FILTER_VALIDATE_INT)) {
+                if (0 <= $value = \filter_var($value, FILTER_VALIDATE_INT)) {
                     throw new \Error("$option must be a positive integer greater than 0");
                 }
                 break;
             case "validateUtf8":
             case "textOnly":
-                if (null === $value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) {
+                if (null === $value = \filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) {
                     throw new \Error("$option must be a boolean value");
                 }
                 break;
@@ -376,7 +377,7 @@ class Rfc6455Endpoint {
     }
 
     /**
-     * A stateful generator websocket frame parser
+     * A stateful generator websocket frame parser.
      *
      * @param \Amp\Websocket\Rfc6455Endpoint $endpoint Endpoint to receive parser event emissions
      * @param array $options Optional parser settings
@@ -400,7 +401,7 @@ class Rfc6455Endpoint {
 
         while (1) {
             if ($bufferSize < 2) {
-                $buffer = substr($buffer, $offset);
+                $buffer = \substr($buffer, $offset);
                 $offset = 0;
                 do {
                     $buffer .= yield $frames;
@@ -409,16 +410,16 @@ class Rfc6455Endpoint {
                 } while ($bufferSize < 2);
             }
 
-            $firstByte = ord($buffer[$offset]);
-            $secondByte = ord($buffer[$offset + 1]);
+            $firstByte = \ord($buffer[$offset]);
+            $secondByte = \ord($buffer[$offset + 1]);
 
             $offset += 2;
             $bufferSize -= 2;
 
-            $fin = (bool)($firstByte & 0b10000000);
+            $fin = (bool) ($firstByte & 0b10000000);
             // $rsv = ($firstByte & 0b01110000) >> 4; // unused (let's assume the bits are all zero)
             $opcode = $firstByte & 0b00001111;
-            $isMasked = (bool)($secondByte & 0b10000000);
+            $isMasked = (bool) ($secondByte & 0b10000000);
             $maskingKey = null;
             $frameLength = $secondByte & 0b01111111;
 
@@ -429,7 +430,7 @@ class Rfc6455Endpoint {
 
             if ($frameLength === 0x7E) {
                 if ($bufferSize < 2) {
-                    $buffer = substr($buffer, $offset);
+                    $buffer = \substr($buffer, $offset);
                     $offset = 0;
                     do {
                         $buffer .= yield $frames;
@@ -438,12 +439,12 @@ class Rfc6455Endpoint {
                     } while ($bufferSize < 2);
                 }
 
-                $frameLength = unpack('n', $buffer[$offset] . $buffer[$offset + 1])[1];
+                $frameLength = \unpack('n', $buffer[$offset] . $buffer[$offset + 1])[1];
                 $offset += 2;
                 $bufferSize -= 2;
             } elseif ($frameLength === 0x7F) {
                 if ($bufferSize < 8) {
-                    $buffer = substr($buffer, $offset);
+                    $buffer = \substr($buffer, $offset);
                     $offset = 0;
                     do {
                         $buffer .= yield $frames;
@@ -452,7 +453,7 @@ class Rfc6455Endpoint {
                     } while ($bufferSize < 8);
                 }
 
-                $lengthLong32Pair = unpack('N2', substr($buffer, $offset, 8));
+                $lengthLong32Pair = \unpack('N2', \substr($buffer, $offset, 8));
                 $offset += 8;
                 $bufferSize -= 8;
 
@@ -542,7 +543,7 @@ class Rfc6455Endpoint {
                     $dataMsgBytesRecd += $frameLength;
                 }
 
-                $payload = substr($buffer, $offset, $frameLength);
+                $payload = \substr($buffer, $offset, $frameLength);
                 $offset += $frameLength;
                 $bufferSize -= $frameLength;
             } else {
@@ -551,29 +552,29 @@ class Rfc6455Endpoint {
                 }
                 $frameBytesRecd = $bufferSize;
 
-                $payload = substr($buffer, $offset);
+                $payload = \substr($buffer, $offset);
 
                 do {
                     // if we want to validate UTF8, we must *not* send incremental mid-frame updates because the message might be broken in the middle of an utf-8 sequence
                     // also, control frames always are <= 125 bytes, so we never will need this as per https://tools.ietf.org/html/rfc6455#section-5.5
                     if (!$isControlFrame && $dataMsgBytesRecd >= $nextEmit) {
                         if ($isMasked) {
-                            $payload ^= str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
+                            $payload ^= \str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
                             // Shift the mask so that the next data where the mask is used on has correct offset.
-                            $maskingKey = substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
+                            $maskingKey = \substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
                         }
 
                         if ($dataArr) {
                             $dataArr[] = $payload;
-                            $payload = implode($dataArr);
+                            $payload = \implode($dataArr);
                             $dataArr = [];
                         }
 
                         if ($doUtf8Validation) {
                             $string = $payload;
                             /* @TODO: check how many bits are set to 1 instead of multiple (slow) preg_match()es and substr()s */
-                            for ($i = 0; !preg_match('//u', $payload) && $i < 8; $i++) {
-                                $payload = substr($payload, 0, -1);
+                            for ($i = 0; !\preg_match('//u', $payload) && $i < 8; $i++) {
+                                $payload = \substr($payload, 0, -1);
                             }
                             if ($i === 8) {
                                 $endpoint->onParsedError(
@@ -584,7 +585,7 @@ class Rfc6455Endpoint {
                             }
 
                             $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
-                            $payload = $i > 0 ? substr($string, -$i) : '';
+                            $payload = $i > 0 ? \substr($string, -$i) : '';
                         } else {
                             $endpoint->onParsedData($payload, $opcode === self::OP_BIN, false);
                             $payload = '';
@@ -609,7 +610,7 @@ class Rfc6455Endpoint {
                         $dataMsgBytesRecd += $dataLen;
                     }
 
-                    $payload .= substr($buffer, 0, $dataLen);
+                    $payload .= \substr($buffer, 0, $dataLen);
                     $frameBytesRecd += $dataLen;
                 } while ($frameBytesRecd !== $frameLength);
 
@@ -623,20 +624,20 @@ class Rfc6455Endpoint {
                 } else {
                     if ($dataArr) {
                         $dataArr[] = $payload;
-                        $payload = implode($dataArr);
+                        $payload = \implode($dataArr);
                         $dataArr = [];
                     }
 
                     if ($doUtf8Validation) {
                         if ($fin) {
-                            $i = preg_match('//u', $payload) ? 0 : 8;
+                            $i = \preg_match('//u', $payload) ? 0 : 8;
                         } else {
                             $string = $payload;
-                            for ($i = 0; !preg_match('//u', $payload) && $i < 8; $i++) {
-                                $payload = substr($payload, 0, -1);
+                            for ($i = 0; !\preg_match('//u', $payload) && $i < 8; $i++) {
+                                $payload = \substr($payload, 0, -1);
                             }
                             if ($i > 0) {
-                                $dataArr[] = substr($string, -$i);
+                                $dataArr[] = \substr($string, -$i);
                             }
                         }
                         if ($i === 8) {
