@@ -14,7 +14,7 @@ class Handshake {
     private $target;
     private $path;
     private $headers = [];
-    private $options = [];
+    private $options;
 
     /**
      * @param string $url target address of websocket (e.g. ws://foo.bar/baz or wss://crypto.example/?secureConnection)
@@ -22,26 +22,24 @@ class Handshake {
      */
     public function __construct(string $url, array $options = []) {
         $this->options = $options;
-        
+
         $url = \parse_url($url);
-        $this->crypto = $url["scheme"] == "wss";
-        $host = $this->target = $url["host"];
-        if (isset($url["port"])) {
-            $this->target .= ":{$url['port']}";
-            if ($url["port"] != ($this->crypto ? 443 : 80)) {
-                $host = $this->target;
-            }
-        } elseif ($this->crypto) {
-            $this->target .= ":443";
-        } else {
-            $this->target .= ":80";
+
+        $this->crypto = $url["scheme"] === "wss";
+        $defaultPort = $this->crypto ? 443 : 80;
+
+        $host = $url["host"];
+        $port = $url["port"] ?? $defaultPort;
+
+        $this->target = $host . ":" . $port;
+
+        if ($url["port"] !== $defaultPort) {
+            $host .= ":" . $port;
         }
+
         $this->headers["Host"] = $host;
-        if (isset($url["path"])) {
-            $this->path = $url["path"];
-        } else {
-            $this->path = "/";
-        }
+        $this->path = $url["path"] ?? "/";
+
         if (isset($url["query"])) {
             $this->path .= "?{$url['query']}";
         }
@@ -49,6 +47,7 @@ class Handshake {
 
     public function setHeader(string $field, $value): self {
         $this->headers[$field] = $value;
+
         return $this;
     }
 
@@ -62,10 +61,13 @@ class Handshake {
 
     private function getRequest(): string {
         $headers = "";
+
         foreach ($this->headers as $field => $value) {
             $headers .= "$field: $value\r\n";
         }
+
         $accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
+
         return "GET $this->path HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
     }
 
