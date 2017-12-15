@@ -235,12 +235,14 @@ final class Rfc6455Endpoint implements Endpoint {
             $binary = $opcode === self::OP_BIN;
 
             $this->currentMessageEmitter = new Emitter;
-            $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
 
             if ($this->nextMessageDeferred) {
                 $deferred = $this->nextMessageDeferred;
                 $this->nextMessageDeferred = null;
+                $this->messages = [new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary)];
                 $deferred->resolve(true);
+            } else {
+                $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
             }
         }
 
