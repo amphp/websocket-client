@@ -46,9 +46,9 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
                 $headerBuffer = \substr($buffer, 0, $position + 4);
                 $buffer = \substr($buffer, $position + 4);
 
-                $handshake->validateResponse($headerBuffer);
+                $headers = $handshake->decodeResponse($headerBuffer);
 
-                return new Rfc6455Endpoint($socket, $buffer, $options);
+                return new Rfc6455Endpoint($socket, $headers, $buffer, $options);
             }
         }
 

@@ -28,6 +28,9 @@ final class Rfc6455Endpoint implements Endpoint {
     /** @var Socket */
     private $socket;
 
+    /** @var array[] */
+    private $headers;
+
     /** @var \Generator */
     private $parser;
 
@@ -84,7 +87,9 @@ final class Rfc6455Endpoint implements Endpoint {
     const CONTROL = -1;
     const ERROR = -2;
 
-    public function __construct(Socket $socket, string $buffer, array $options = []) {
+    public function __construct(Socket $socket, array $headers, string $buffer, array $options = []) {
+        $this->headers = $headers;
+
         $this->timeoutWatcher = Loop::repeat(1000, function () {
             $now = \time();
 
@@ -109,6 +114,18 @@ final class Rfc6455Endpoint implements Endpoint {
 
     public function __destruct() {
         Loop::cancel($this->timeoutWatcher);
+    }
+
+    public function getHeaders(): array {
+        return $this->headers;
+    }
+
+    public function getHeader(string $field) {
+        return $this->headers[\strtolower($field)][0] ?? null;
+    }
+
+    public function getHeaderArray(string $field) {
+        return $this->headers[\strtolower($field)] ?? [];
     }
 
     public function close(int $code = Code::NORMAL_CLOSE, string $reason = '') {

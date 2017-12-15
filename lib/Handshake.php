@@ -70,7 +70,7 @@ final class Handshake {
         return 'GET ' . $this->path . " HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
     }
 
-    public function validateResponse(string $headerBuffer) {
+    public function decodeResponse(string $headerBuffer): array {
         $startLine = \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n"));
 
         if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", $startLine)) {
@@ -90,5 +90,7 @@ final class Handshake {
         }
 
         // TODO: validate headers...
+
+        return $headers;
     }
 }
