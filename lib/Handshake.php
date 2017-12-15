@@ -51,7 +51,11 @@ final class Handshake {
         return $this->encrypted;
     }
 
-    public function getRawRequest(): string {
+    public function getHeaders(): array {
+        return $this->headers;
+    }
+
+    public function generateRequest(): string {
         $headers = '';
 
         foreach ($this->headers as $field => $values) {
@@ -63,6 +67,28 @@ final class Handshake {
 
         $accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
 
-        return "GET $this->path HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
+        return 'GET ' . $this->path . " HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: $accept\r\n$headers\r\n";
+    }
+
+    public function validateResponse(string $headerBuffer) {
+        $startLine = \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n"));
+
+        if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", $startLine)) {
+            throw new WebSocketException('Did not receive switching protocols response: ' . $startLine);
+        }
+
+        \preg_match_all("(
+            (?P<field>[^()<>@,;:\\\"/[\\]?={}\x01-\x20\x7F]+):[\x20\x09]*
+            (?P<value>[^\x01-\x08\x0A-\x1F\x7F]*)\x0D?[\x20\x09]*\r?\n
+        )x", $headerBuffer, $responseHeaders);
+
+        $headers = [];
+
+        /** @var array[] $responseHeaders */
+        foreach ($responseHeaders['field'] as $idx => $field) {
+            $headers[\strtolower($field)][] = $responseHeaders['value'][$idx];
+        }
+
+        // TODO: validate headers...
     }
 }

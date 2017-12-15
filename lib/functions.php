@@ -35,7 +35,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
             $socket = yield Socket\connect($handshake->getRemoteAddress(), $connectContext);
         }
 
-        yield $socket->write($handshake->getRawRequest());
+        yield $socket->write($handshake->generateRequest());
 
         $buffer = '';
 
@@ -46,24 +46,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
                 $headerBuffer = \substr($buffer, 0, $position + 4);
                 $buffer = \substr($buffer, $position + 4);
 
-                $startLine = \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n"));
-                if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", $startLine)) {
-                    throw new WebSocketException('Did not receive switching protocols response: ' . $startLine);
-                }
-
-                \preg_match_all("(
-                    (?P<field>[^()<>@,;:\\\"/[\\]?={}\x01-\x20\x7F]+):[\x20\x09]*
-                    (?P<value>[^\x01-\x08\x0A-\x1F\x7F]*)\x0D?[\x20\x09]*\r?\n
-                )x", $headerBuffer, $responseHeaders);
-
-                $headers = [];
-
-                /** @var array[] $responseHeaders */
-                foreach ($responseHeaders['field'] as $idx => $field) {
-                    $headers[\strtolower($field)][] = $responseHeaders['value'][$idx];
-                }
-
-                // TODO: validate headers...
+                $handshake->validateResponse($headerBuffer);
 
                 return new Rfc6455Endpoint($socket, $buffer, $options);
             }
