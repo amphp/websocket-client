@@ -78,7 +78,7 @@ class Rfc6455Endpoint {
     const CONTROL = -1;
     const ERROR = -2;
 
-    public function __construct(Socket $socket, array $headers, string $buffer) {
+    public function __construct(Socket $socket, array $headers, string $buffer, array $options = []) {
         if (!$headers) {
             throw new ServerException;
         }
@@ -86,7 +86,7 @@ class Rfc6455Endpoint {
         Loop::unreference($this->timeoutWatcher);
         $this->connectedAt = \time();
         $this->socket = $socket;
-        $this->parser = $this->parser($this);
+        $this->parser = self::parser($this, $options);
 
         if ($buffer !== "") {
             $this->framesRead += $this->parser->send($buffer);
@@ -382,7 +382,7 @@ class Rfc6455Endpoint {
      * @param array $options Optional parser settings
      * @return \Generator
      */
-    public static function parser(self $endpoint, array $options = []): \Generator {
+    private static function parser(self $endpoint, array $options = []): \Generator {
         $emitThreshold = $options["threshold"] ?? 32768;
         $maxFrameSize = $options["max_frame_size"] ?? PHP_INT_MAX;
         $maxMsgSize = $options["max_msg_size"] ?? PHP_INT_MAX;

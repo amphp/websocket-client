@@ -11,8 +11,8 @@ class Rfc6455Connection implements Connection {
     /** @var \Amp\Websocket\Message */
     private $message;
 
-    public function __construct($socket, array $headers, string $buffer) {
-        $this->processor = new Rfc6455Endpoint($socket, $headers, $buffer);
+    public function __construct($socket, array $headers, string $buffer, array $options = []) {
+        $this->processor = new Rfc6455Endpoint($socket, $headers, $buffer, $options);
         $this->next();
     }
 

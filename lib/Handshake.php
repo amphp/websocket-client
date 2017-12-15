@@ -14,11 +14,15 @@ class Handshake {
     private $target;
     private $path;
     private $headers = [];
+    private $options = [];
 
     /**
      * @param string $url target address of websocket (e.g. ws://foo.bar/baz or wss://crypto.example/?secureConnection)
+     * @param mixed[] $options Connection options
      */
-    public function __construct(string $url) {
+    public function __construct(string $url, array $options = []) {
+        $this->options = $options;
+        
         $url = parse_url($url);
         $this->crypto = $url["scheme"] == "wss";
         $host = $this->target = $url["host"];
@@ -100,6 +104,6 @@ class Handshake {
             $headers[strtolower($field)][] = $m["value"][$idx];
         }
         // TODO: validate headers...
-        return new Rfc6455Connection($socket, $headers, $buffer);
+        return new Rfc6455Connection($socket, $headers, $buffer, $this->options);
     }
 }
