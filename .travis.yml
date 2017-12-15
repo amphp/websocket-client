@@ -3,18 +3,41 @@ sudo: false
 language: php
 
 php:
-  - 5.5
-  - 5.6
-  - 7
+  - 7.0
+  - 7.1
+  - 7.2
+  - nightly
 
-before_script:
-  - composer self-update
-  - composer require satooshi/php-coveralls:dev-master
-  - composer install
+matrix:
+  allow_failures:
+    - php: nightly
+  fast_finish: true
+
+env:
+  - AMP_DEBUG=true
+
+before_install:
+  - phpenv config-rm xdebug.ini || echo "No xdebug config."
+
+install:
+  - composer update -n --prefer-dist
+
+  - mkdir -p coverage/cov coverage/bin
+  - wget https://phar.phpunit.de/phpcov.phar -O coverage/bin/phpcov
+  - chmod +x coverage/bin/phpcov
+
+  - composer show
 
 script:
-  - $(php -r 'if (PHP_MAJOR_VERSION >= 7) echo "phpdbg -qrr"; else echo "php";') vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
-  - php vendor/bin/php-cs-fixer --diff --dry-run -v fix
+  - vendor/bin/phpunit --verbose --coverage-php coverage/cov/main.cov
+  - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix
 
 after_script:
-  - php vendor/bin/coveralls -v
+  - curl -OL https://github.com/php-coveralls/php-coveralls/releases/download/v1.0.0/coveralls.phar
+  - chmod +x coveralls.phar
+  - phpdbg -qrr coverage/bin/phpcov merge --clover build/logs/clover.xml coverage/cov
+  - ./coveralls.phar
+
+cache:
+  directories:
+    - $HOME/.composer/cache/files
