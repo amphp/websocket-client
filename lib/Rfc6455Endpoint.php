@@ -333,8 +333,6 @@ final class Rfc6455Endpoint implements Endpoint {
         } catch (\Throwable $exception) {
             $this->close();
             throw $exception;
-        } finally {
-            $this->lastWrite = null;
         }
 
         return $bytes;
