@@ -35,9 +35,8 @@ Amp\Loop::run(function () {
 
     $i = 0;
 
-    /** @var \Amp\Websocket\Message $message */
-    foreach ($connection as $message) {
-        $payload = yield $message;
+    while (yield $connection->advance()) {
+        $payload = yield $connection->getCurrent();
         printf("Received: %s\n", $payload);
 
         if ($payload === "Goodbye!") {
