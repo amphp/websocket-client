@@ -10,6 +10,7 @@ use Amp\Emitter;
 use Amp\Loop;
 use Amp\Promise;
 use Amp\Socket\Socket;
+use Amp\Success;
 
 final class Rfc6455Endpoint implements Endpoint {
     use CallableMaker;
@@ -41,6 +42,9 @@ final class Rfc6455Endpoint implements Endpoint {
 
     /** @var Deferred */
     private $nextMessageDeferred;
+
+    /** @var bool */
+    private $serverInitiatedClose = false;
 
     /** @var Promise|null */
     private $lastWrite;
@@ -82,7 +86,7 @@ final class Rfc6455Endpoint implements Endpoint {
 
     public function __construct(Socket $socket, array $headers, string $buffer, array $options = []) {
         if (!$headers) {
-            throw new ServerException;
+            throw new WebSocketException;
         }
 
         $this->timeoutWatcher = Loop::repeat(1000, function () {
@@ -123,16 +127,21 @@ final class Rfc6455Endpoint implements Endpoint {
 
         $this->sendCloseFrame($code, $reason);
 
-        $exception = new ServerException('The connection was closed');
+        $exception = new ClosedException('The server closed the connection: ' . $reason, $code, $reason);
 
-        if ($this->currentMessageEmitter) {
+        if ($this->serverInitiatedClose && $this->currentMessageEmitter) {
             $this->currentMessageEmitter->fail($exception);
         }
 
         if ($this->nextMessageDeferred) {
             $deferred = $this->nextMessageDeferred;
             $this->nextMessageDeferred = null;
-            $deferred->fail($exception);
+
+            if ($this->serverInitiatedClose) {
+                $deferred->fail($exception);
+            } else {
+                $deferred->resolve(false);
+            }
         }
 
         // Don't unload the client here, it will be unloaded upon timeout
@@ -161,7 +170,7 @@ final class Rfc6455Endpoint implements Endpoint {
         $this->parser = null;
         $this->socket->close();
 
-        $exception = new ServerException('The connection was closed');
+        $exception = new WebSocketException('The connection was closed');
 
         // fail not yet terminated message streams; they *must not* be failed before client is removed
         if ($this->currentMessageEmitter) {
@@ -186,6 +195,7 @@ final class Rfc6455Endpoint implements Endpoint {
                     $code = \current(\unpack('S', \substr($data, 0, 2)));
                     $reason = \substr($data, 2);
 
+                    $this->serverInitiatedClose = true;
                     $this->close($code, $reason);
                 }
                 break;
@@ -215,11 +225,6 @@ final class Rfc6455Endpoint implements Endpoint {
             $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
 
             if ($this->nextMessageDeferred) {
-                if (\count($this->messages) > 1) {
-                    \reset($this->messages);
-                    unset($this->messages[\key($this->messages)]);
-                }
-
                 $deferred = $this->nextMessageDeferred;
                 $this->nextMessageDeferred = null;
                 $deferred->resolve(true);
@@ -344,6 +349,17 @@ final class Rfc6455Endpoint implements Endpoint {
             throw new \Error('Await the previous promise returned from advance() before calling advance() again');
         }
 
+        if ($this->isClosed()) {
+            throw new \Error('The WebSocket connection has already been closed.');
+        }
+
+        if (\count($this->messages) > 1) {
+            \reset($this->messages);
+            unset($this->messages[\key($this->messages)]);
+
+            return new Success(true);
+        }
+
         $this->nextMessageDeferred = new Deferred;
 
         return $this->nextMessageDeferred->promise();
@@ -355,7 +371,7 @@ final class Rfc6455Endpoint implements Endpoint {
      * @return Message Message sent by the remote.
      *
      * @throws \Error If the promise returned from advance() resolved to false or didn't resolve yet.
-     * @throws ServerException If the connection closed.
+     * @throws WebSocketException If the connection closed.
      */
     public function getCurrent() {
         if (\count($this->messages)) {

@@ -48,7 +48,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
 
                 $startLine = \substr($headerBuffer, 0, \strpos($headerBuffer, "\r\n"));
                 if (!\preg_match("(^HTTP/1.1[\x20\x09]101[\x20\x09]*[^\x01-\x08\x10-\x19]*$)", $startLine)) {
-                    throw new ServerException('Did not receive switching protocols response: ' . $startLine);
+                    throw new WebSocketException('Did not receive switching protocols response: ' . $startLine);
                 }
 
                 \preg_match_all("(
@@ -69,6 +69,6 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
             }
         }
 
-        throw new ServerException('Failed to read response from server');
+        throw new WebSocketException('Failed to read response from server');
     });
 }
