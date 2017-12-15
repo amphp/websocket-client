@@ -18,7 +18,6 @@ composer require amphp/websocket
 ## Requirements
 
 * PHP 7.0+
-* [Amp framework](https://github.com/amphp/amp) (installed via composer)
 
 ## Documentation & Examples
 
@@ -58,7 +57,7 @@ Amp\Loop::run(function () {
 ```
 ## Versioning
 
-`amphp/mysql` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
+`amphp/websocket` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
 
 ## Security
 
