@@ -52,5 +52,10 @@
         "psr-4": {
             "Amp\\Websocket\\Test\\": "test"
         }
+    },
+    "config": {
+        "platform": {
+            "php": "7.0.0"
+        }
     }
 }
