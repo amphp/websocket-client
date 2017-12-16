@@ -45,9 +45,6 @@ final class Rfc6455Connection implements Connection {
     /** @var Promise|null */
     private $lastWrite;
 
-    /** @var int */
-    private $closeTimeout;
-
     /** @var string */
     private $timeoutWatcher;
 
@@ -84,17 +81,6 @@ final class Rfc6455Connection implements Connection {
         $this->headers = $headers;
         $this->options = $options;
 
-        $this->timeoutWatcher = Loop::repeat(1000, function () {
-            $now = \time();
-
-            if ($this->closeTimeout < $now && $this->closedAt) {
-                $this->unloadServer();
-                $this->closeTimeout = null;
-            }
-        });
-
-        Loop::unreference($this->timeoutWatcher);
-
         $this->connectedAt = \time();
         $this->socket = $socket;
         $this->parser = $this->parser();
@@ -106,10 +92,6 @@ final class Rfc6455Connection implements Connection {
         }
 
         Promise\rethrow(new Coroutine($this->read()));
-    }
-
-    public function __destruct() {
-        Loop::cancel($this->timeoutWatcher);
     }
 
     /** @inheritdoc */
@@ -134,7 +116,6 @@ final class Rfc6455Connection implements Connection {
             return;
         }
 
-        $this->closeTimeout = \time() + $this->options->getClosePeriod();
         $this->closeCode = $code;
         $this->closeReason = $reason;
 
@@ -156,6 +137,10 @@ final class Rfc6455Connection implements Connection {
                 $deferred->resolve();
             }
         }
+
+        $this->timeoutWatcher = Loop::delay($this->options->getClosePeriod() * 1000, function () {
+            $this->unloadServer();
+        });
 
         // Don't unload the client here, it will be unloaded upon timeout
     }
@@ -180,6 +165,10 @@ final class Rfc6455Connection implements Connection {
         $this->parser = null;
         $this->socket->close();
 
+        if ($this->timeoutWatcher) {
+            Loop::cancel($this->timeoutWatcher);
+        }
+
         $exception = new WebSocketException('The connection was closed');
 
         // fail not yet terminated message streams; they *must not* be failed before client is removed
@@ -202,7 +191,6 @@ final class Rfc6455Connection implements Connection {
         switch ($opcode) {
             case self::OP_CLOSE:
                 if ($this->closedAt) {
-                    $this->closeTimeout = null;
                     $this->unloadServer();
                 } else {
                     if (\strlen($data) < 2) {
@@ -280,8 +268,6 @@ final class Rfc6455Connection implements Connection {
             $this->closeCode = Code::ABNORMAL_CLOSE;
             $this->closeReason = 'Client closed the underlying TCP connection';
             $this->serverInitiatedClose = true;
-        } else {
-            $this->closeTimeout = null;
         }
 
         $this->unloadServer();
