@@ -13,18 +13,20 @@ use function Amp\call;
  * @param string|\Amp\Websocket\Handshake       $handshake
  * @param \Amp\Socket\ClientConnectContext|null $connectContext
  * @param \Amp\Socket\ClientTlsContext|null     $tlsContext
- * @param array                                 $options
+ * @param Options                               $options
  *
  * @return \Amp\Promise<\Amp\WebSocket\Connection>
  *
  * @throws \TypeError If $handshake is not a string or instance of \Amp\WebSocket\Handshake.
  */
-function connect($handshake, ClientConnectContext $connectContext = null, ClientTlsContext $tlsContext = null, array $options = []): Promise {
+function connect($handshake, ClientConnectContext $connectContext = null, ClientTlsContext $tlsContext = null, Options $options = null): Promise {
     if (\is_string($handshake)) {
         $handshake = new Handshake($handshake);
     } elseif (!$handshake instanceof Handshake) {
         throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Handshake::class));
     }
+
+    $options = $options ?? new Options;
 
     return call(function () use ($handshake, $connectContext, $tlsContext, $options) {
         if ($handshake->isEncrypted()) {

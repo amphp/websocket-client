@@ -160,7 +160,7 @@ class WebSocketTest extends TestCase {
             $port = yield $this->createServer(new class extends WebsocketAdapter {
                 public function onOpen(int $clientId, $handshakeData) {
                     Loop::defer(function () use ($clientId) {
-                        $payload = \str_repeat('.', 1024 * 1024 * 32); // 32 MiB
+                        $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
                         yield $this->endpoint->sendBinary($payload, $clientId);
                     });
                 }
@@ -170,7 +170,7 @@ class WebSocketTest extends TestCase {
             $client = yield connect('ws://localhost:' . $port . '/');
 
             yield $client->advance();
-            $this->assertSame(\str_repeat('.', 1024 * 1024 * 32), yield $client->getCurrent());
+            $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $client->getCurrent());
         }));
     }
 }

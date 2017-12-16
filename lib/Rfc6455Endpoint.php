@@ -3,7 +3,6 @@
 namespace Amp\Websocket;
 
 use Amp\ByteStream\IteratorStream;
-use Amp\CallableMaker;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Emitter;
@@ -13,17 +12,8 @@ use Amp\Socket\Socket;
 use Amp\Success;
 
 final class Rfc6455Endpoint implements Endpoint {
-    use CallableMaker;
-
-    public $autoFrameSize = 32768;
-    public $maxFrameSize = 2097152;
-    public $maxMsgSize = 10485760;
-    public $heartbeatPeriod = 10;
-    public $closePeriod = 3;
-    public $validateUtf8 = false;
-    public $textOnly = false;
-    public $queuedPingLimit = 3;
-    // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
+    /** @var Options */
+    private $options;
 
     /** @var Socket */
     private $socket;
@@ -87,8 +77,9 @@ final class Rfc6455Endpoint implements Endpoint {
     const CONTROL = -1;
     const ERROR = -2;
 
-    public function __construct(Socket $socket, array $headers, string $buffer, array $options = []) {
+    public function __construct(Socket $socket, array $headers, string $buffer, Options $options) {
         $this->headers = $headers;
+        $this->options = $options;
 
         $this->timeoutWatcher = Loop::repeat(1000, function () {
             $now = \time();
@@ -103,7 +94,7 @@ final class Rfc6455Endpoint implements Endpoint {
 
         $this->connectedAt = \time();
         $this->socket = $socket;
-        $this->parser = self::parser($this, $options);
+        $this->parser = $this->parser();
 
         if ($buffer !== '') {
             $this->framesRead += $this->parser->send($buffer);
@@ -124,7 +115,7 @@ final class Rfc6455Endpoint implements Endpoint {
         return $this->headers[\strtolower($field)][0] ?? null;
     }
 
-    public function getHeaderArray(string $field) {
+    public function getHeaderArray(string $field): array {
         return $this->headers[\strtolower($field)] ?? [];
     }
 
@@ -134,7 +125,7 @@ final class Rfc6455Endpoint implements Endpoint {
             return;
         }
 
-        $this->closeTimeout = \time() + $this->closePeriod;
+        $this->closeTimeout = \time() + $this->options->getClosePeriod();
         $this->closeCode = $code;
         $this->closeReason = $reason;
 
@@ -158,10 +149,6 @@ final class Rfc6455Endpoint implements Endpoint {
         }
 
         // Don't unload the client here, it will be unloaded upon timeout
-    }
-
-    public function messageCount(): int {
-        return $this->messagesRead;
     }
 
     public function isClosed(): bool {
@@ -188,6 +175,12 @@ final class Rfc6455Endpoint implements Endpoint {
         // fail not yet terminated message streams; they *must not* be failed before client is removed
         if ($this->currentMessageEmitter) {
             $this->currentMessageEmitter->fail($exception);
+        }
+
+        if ($this->nextMessageDeferred && $this->serverInitiatedClose) {
+            $deferred = $this->nextMessageDeferred;
+            $this->nextMessageDeferred = null;
+            $deferred->fail(new ClosedException('The connection was closed: ' . $this->closeReason, $this->closeCode, $this->closeReason));
         }
     }
 
@@ -276,6 +269,7 @@ final class Rfc6455Endpoint implements Endpoint {
             $this->closedAt = \time();
             $this->closeCode = Code::ABNORMAL_CLOSE;
             $this->closeReason = 'Client closed the underlying TCP connection';
+            $this->serverInitiatedClose = true;
         } else {
             $this->closeTimeout = null;
         }
@@ -337,9 +331,9 @@ final class Rfc6455Endpoint implements Endpoint {
         try {
             $bytes = 0;
 
-            if (\strlen($data) > 1.5 * $this->autoFrameSize) {
+            if (\strlen($data) > 1.5 * $this->options->getAutoFrameSize()) {
                 $len = \strlen($data);
-                $slices = \ceil($len / $this->autoFrameSize);
+                $slices = \ceil($len / $this->options->getAutoFrameSize());
                 $chunks = \str_split($data, \ceil($len / $slices));
                 $final = \array_pop($chunks);
                 foreach ($chunks as $chunk) {
@@ -386,44 +380,13 @@ final class Rfc6455Endpoint implements Endpoint {
      * @return Message Message sent by the remote.
      *
      * @throws \Error If the promise returned from advance() resolved to false or didn't resolve yet.
-     * @throws WebSocketException If the connection closed.
      */
-    public function getCurrent() {
+    public function getCurrent(): Message {
         if (\count($this->messages)) {
             return \reset($this->messages);
         }
 
         throw new \Error('Await the promise returned from advance() before calling getCurrent()');
-    }
-
-    public function setOption(string $option, $value) {
-        switch ($option) {
-            case 'maxBytesPerMinute':
-                if (8192 > $value) {
-                    throw new \Error("$option must be at least 8192 bytes");
-                }
-            // no break
-            case 'autoFrameSize':
-            case 'maxFrameSize':
-            case 'maxFramesPerSecond':
-            case 'maxMsgSize':
-            case 'heartbeatPeriod':
-            case 'closePeriod':
-            case 'queuedPingLimit':
-                if (0 <= $value = \filter_var($value, FILTER_VALIDATE_INT)) {
-                    throw new \Error("$option must be a positive integer greater than 0");
-                }
-                break;
-            case 'validateUtf8':
-            case 'textOnly':
-                if (null === $value = \filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)) {
-                    throw new \Error("$option must be a boolean value");
-                }
-                break;
-            default:
-                throw new \Error("Unknown option $option");
-        }
-        $this->{$option} = $value;
     }
 
     public function getInfo(): array {
@@ -444,19 +407,17 @@ final class Rfc6455Endpoint implements Endpoint {
     }
 
     /**
-     * A stateful generator websocket frame parser.
-     *
-     * @param \Amp\Websocket\Rfc6455Endpoint $endpoint Endpoint to receive parser event emissions
-     * @param array                          $options Optional parser settings
+     * A stateful generator WebSocket frame parser.
      *
      * @return \Generator
      */
-    private static function parser(self $endpoint, array $options = []): \Generator {
-        $emitThreshold = $options['threshold'] ?? 32768;
-        $maxFrameSize = $options['max_frame_size'] ?? PHP_INT_MAX;
-        $maxMsgSize = $options['max_msg_size'] ?? PHP_INT_MAX;
-        $textOnly = $options['text_only'] ?? false;
-        $doUtf8Validation = $validateUtf8 = $options['validate_utf8'] ?? false;
+    private function parser(): \Generator {
+        // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
+        $emitThreshold = $this->options->getStreamThreshold();
+        $maxFrameSize = $this->options->getMaximumFrameSize();
+        $maxMsgSize = $this->options->getMaximumMessageSize();
+        $textOnly = $this->options->isTextOnly();
+        $doUtf8Validation = $validateUtf8 = $this->options->isValidateUtf8();
 
         $dataMsgBytesRecd = 0;
         $nextEmit = $emitThreshold;
@@ -527,7 +488,7 @@ final class Rfc6455Endpoint implements Endpoint {
 
                 if (PHP_INT_MAX === 0x7fffffff) {
                     if ($lengthLong32Pair[1] !== 0 || $lengthLong32Pair[2] < 0) {
-                        $endpoint->onParsedError(
+                        $this->onParsedError(
                             Code::MESSAGE_TOO_LARGE,
                             'Payload exceeds maximum allowable size'
                         );
@@ -537,7 +498,7 @@ final class Rfc6455Endpoint implements Endpoint {
                 } else {
                     $frameLength = ($lengthLong32Pair[1] << 32) | $lengthLong32Pair[2];
                     if ($frameLength < 0) {
-                        $endpoint->onParsedError(
+                        $this->onParsedError(
                             Code::PROTOCOL_ERROR,
                             'Most significant bit of 64-bit length field set'
                         );
@@ -547,7 +508,7 @@ final class Rfc6455Endpoint implements Endpoint {
             }
 
             if ($isMasked) {
-                $endpoint->onParsedError(
+                $this->onParsedError(
                     Code::PROTOCOL_ERROR,
                     'Payload must not be masked to client'
                 );
@@ -556,7 +517,7 @@ final class Rfc6455Endpoint implements Endpoint {
 
             if ($isControlFrame) {
                 if (!$fin) {
-                    $endpoint->onParsedError(
+                    $this->onParsedError(
                         Code::PROTOCOL_ERROR,
                         'Illegal control frame fragmentation'
                     );
@@ -564,7 +525,7 @@ final class Rfc6455Endpoint implements Endpoint {
                 }
 
                 if ($frameLength > 125) {
-                    $endpoint->onParsedError(
+                    $this->onParsedError(
                         Code::PROTOCOL_ERROR,
                         'Control frame payload must be of maximum 125 bytes or less'
                     );
@@ -573,17 +534,16 @@ final class Rfc6455Endpoint implements Endpoint {
             } elseif (($opcode === 0x00) === ($dataMsgBytesRecd === 0)) {
                 // We deliberately do not accept a non-fin empty initial text frame
                 $code = Code::PROTOCOL_ERROR;
-                if ($opcode === 0x00) {
-                    $errorMsg = 'Illegal CONTINUATION opcode; initial message payload frame must be TEXT or BINARY';
-                } else {
-                    $errorMsg = 'Illegal data type opcode after unfinished previous data type frame; opcode MUST be CONTINUATION';
-                }
-                $endpoint->onParsedError($code, $errorMsg);
+                $errorMsg = $opcode === 0x00
+                    ? 'Illegal CONTINUATION opcode; initial message payload frame must be TEXT or BINARY'
+                    : 'Illegal data type opcode after unfinished previous data type frame; opcode MUST be CONTINUATION';
+
+                $this->onParsedError($code, $errorMsg);
                 return;
             }
 
             if ($maxFrameSize && $frameLength > $maxFrameSize) {
-                $endpoint->onParsedError(
+                $this->onParsedError(
                     Code::MESSAGE_TOO_LARGE,
                     'Payload exceeds maximum allowable size'
                 );
@@ -591,7 +551,7 @@ final class Rfc6455Endpoint implements Endpoint {
             }
 
             if ($maxMsgSize && ($frameLength + $dataMsgBytesRecd) > $maxMsgSize) {
-                $endpoint->onParsedError(
+                $this->onParsedError(
                     Code::MESSAGE_TOO_LARGE,
                     'Payload exceeds maximum allowable size'
                 );
@@ -599,7 +559,7 @@ final class Rfc6455Endpoint implements Endpoint {
             }
 
             if ($textOnly && $opcode === 0x02) {
-                $endpoint->onParsedError(
+                $this->onParsedError(
                     Code::UNACCEPTABLE_TYPE,
                     'BINARY opcodes (0x02) not accepted'
                 );
@@ -645,17 +605,17 @@ final class Rfc6455Endpoint implements Endpoint {
                                 $payload = \substr($payload, 0, -1);
                             }
                             if ($i === 8) {
-                                $endpoint->onParsedError(
+                                $this->onParsedError(
                                     Code::INCONSISTENT_FRAME_DATA_TYPE,
                                     'Invalid TEXT data; UTF-8 required'
                                 );
                                 return;
                             }
 
-                            $endpoint->onParsedData($opcode, $payload, false);
+                            $this->onParsedData($opcode, $payload, false);
                             $payload = $i > 0 ? \substr($string, -$i) : '';
                         } else {
-                            $endpoint->onParsedData($opcode, $payload, false);
+                            $this->onParsedData($opcode, $payload, false);
                             $payload = '';
                         }
 
@@ -668,11 +628,9 @@ final class Rfc6455Endpoint implements Endpoint {
                     $bufferSize = \strlen($buffer);
                     $frames = 0;
 
-                    if ($bufferSize + $frameBytesRecd >= $frameLength) {
-                        $dataLen = $frameLength - $frameBytesRecd;
-                    } else {
-                        $dataLen = $bufferSize;
-                    }
+                    $dataLen = $bufferSize + $frameBytesRecd >= $frameLength
+                        ? $frameLength - $frameBytesRecd
+                        : $bufferSize;
 
                     if (!$isControlFrame) {
                         $dataMsgBytesRecd += $dataLen;
@@ -688,7 +646,7 @@ final class Rfc6455Endpoint implements Endpoint {
 
             if ($fin || $dataMsgBytesRecd >= $emitThreshold) {
                 if ($isControlFrame) {
-                    $endpoint->onParsedControlFrame($opcode, $payload);
+                    $this->onParsedControlFrame($opcode, $payload);
                 } else {
                     if ($dataArr) {
                         $dataArr[] = $payload;
@@ -709,7 +667,7 @@ final class Rfc6455Endpoint implements Endpoint {
                             }
                         }
                         if ($i === 8) {
-                            $endpoint->onParsedError(
+                            $this->onParsedError(
                                 Code::INCONSISTENT_FRAME_DATA_TYPE,
                                 'Invalid TEXT data; UTF-8 required'
                             );
@@ -722,7 +680,7 @@ final class Rfc6455Endpoint implements Endpoint {
                     }
                     $nextEmit = $dataMsgBytesRecd + $emitThreshold;
 
-                    $endpoint->onParsedData($opcode, $payload, $fin);
+                    $this->onParsedData($opcode, $payload, $fin);
                 }
             } else {
                 $dataArr[] = $payload;
