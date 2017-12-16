@@ -3,7 +3,9 @@
 namespace Amp\Websocket;
 
 use Amp\ByteStream\InputStream;
+use Amp\Coroutine;
 use Amp\Promise;
+use function Amp\call;
 
 /**
  * This class allows streamed and buffered access to an `InputStream` similar to `Amp\ByteStream\Message`.
@@ -18,12 +20,28 @@ final class Message implements InputStream {
     /** @var InputStream */
     private $stream;
 
-    /** @var \Amp\ByteStream\Message|null */
-    private $message;
+    /** @var \Amp\Promise|null */
+    private $promise;
 
     public function __construct(InputStream $stream, bool $binary) {
         $this->stream = $stream;
         $this->binary = $binary;
+    }
+
+    public function __destruct() {
+        if (!$this->promise) {
+            Promise\rethrow(new Coroutine($this->consume()));
+        }
+    }
+
+    private function consume(): \Generator {
+        try {
+            while (yield $this->stream->read() !== null) {
+                // Discard unread bytes from message.
+            }
+        } catch (\Throwable $exception) {
+            // If exception is thrown here the connection closed anyway.
+        }
     }
 
     /**
@@ -33,21 +51,35 @@ final class Message implements InputStream {
         return $this->binary;
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * @throws \Error If a buffered message was requested by calling buffer().
+     */
     public function read(): Promise {
+        if ($this->promise) {
+            throw new \Error("Cannot stream message data once a buffered message has been requested");
+        }
+
         return $this->stream->read();
     }
 
     /**
      * Buffers the entire message and resolves the returned promise then.
      *
-     * @return Promise Resolves with the entire message contents.
+     * @return Promise<string> Resolves with the entire message contents.
      */
     public function buffer(): Promise {
-        if (!$this->message) {
-            $this->message = new \Amp\ByteStream\Message($this->stream);
+        if ($this->promise) {
+            return $this->promise;
         }
 
-        return $this->message;
+        return $this->promise = call(function () {
+            $buffer = '';
+            while (null !== $chunk = yield $this->stream->read()) {
+                $buffer .= $chunk;
+            }
+            return $buffer;
+        });
     }
 }
