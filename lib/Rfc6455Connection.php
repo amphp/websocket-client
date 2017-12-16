@@ -88,8 +88,6 @@ final class Rfc6455Connection implements Connection {
         $this->socket = $socket;
         $this->parser = $this->parser();
 
-        $this->lastEmit = new Success;
-
         if ($buffer !== '') {
             $this->lastReadAt = \time();
             $this->bytesRead += \strlen($buffer);
@@ -241,7 +239,8 @@ final class Rfc6455Connection implements Connection {
             }
         }
 
-        $this->lastEmit = $this->currentMessageEmitter->emit($data);
+        $promise = $this->currentMessageEmitter->emit($data);
+        $this->lastEmit = $this->nextMessageDeferred ? null : $promise;
 
         if ($terminated) {
             $emitter = $this->currentMessageEmitter;
@@ -267,7 +266,9 @@ final class Rfc6455Connection implements Connection {
             $this->bytesRead += \strlen($chunk);
             $this->framesRead += $this->parser->send($chunk);
 
-            yield $this->lastEmit;
+            if ($this->lastEmit) {
+                yield $this->lastEmit;
+            }
         }
 
         if (!$this->closedAt) {

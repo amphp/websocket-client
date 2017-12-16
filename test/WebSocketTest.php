@@ -170,7 +170,6 @@ class WebSocketTest extends TestCase {
 
             $this->assertInstanceOf(Message::class, $message);
             // Do not consume the bytes from the first message.
-            unset($message);
 
             $message = yield $client->receive();
             $this->assertFalse($message->isBinary());
