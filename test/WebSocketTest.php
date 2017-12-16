@@ -14,6 +14,7 @@ use Amp\Success;
 use Amp\Websocket\Endpoint;
 use Amp\Websocket\Message;
 use Amp\Websocket\Test\Helper\WebsocketAdapter;
+use Amp\Websocket\WebSocketException;
 use Psr\Log\LoggerInterface as PsrLogger;
 use Psr\Log\NullLogger;
 use function Aerys\initServer;
@@ -171,6 +172,28 @@ class WebSocketTest extends TestCase {
 
             yield $client->advance();
             $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $client->getCurrent());
+        }));
+    }
+
+    public function testTooLongMessage() {
+        wait(call(function () {
+            $port = yield $this->createServer(new class extends WebsocketAdapter {
+                public function onOpen(int $clientId, $handshakeData) {
+                    Loop::defer(function () use ($clientId) {
+                        $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB
+                        yield $this->endpoint->sendBinary($payload, $clientId);
+                    });
+                }
+            });
+
+            /** @var Endpoint $client */
+            $client = yield connect('ws://localhost:' . $port . '/');
+
+            yield $client->advance();
+
+            $this->expectException(WebSocketException::class);
+            $this->expectExceptionMessage('The connection was closed: Received payload exceeds maximum allowable size');
+            yield $client->getCurrent();
         }));
     }
 }

@@ -39,6 +39,9 @@ final class Rfc6455Endpoint implements Endpoint {
     /** @var bool */
     private $serverInitiatedClose = false;
 
+    /** @var bool */
+    private $parseError = false;
+
     /** @var Promise|null */
     private $lastWrite;
 
@@ -131,9 +134,9 @@ final class Rfc6455Endpoint implements Endpoint {
 
         $this->sendCloseFrame($code, $reason);
 
-        $exception = new ClosedException('The server closed the connection: ' . $reason, $code, $reason);
+        $exception = new ClosedException('The connection was closed: ' . $reason, $code, $reason);
 
-        if ($this->serverInitiatedClose && $this->currentMessageEmitter) {
+        if ($this->currentMessageEmitter) {
             $this->currentMessageEmitter->fail($exception);
         }
 
@@ -141,7 +144,7 @@ final class Rfc6455Endpoint implements Endpoint {
             $deferred = $this->nextMessageDeferred;
             $this->nextMessageDeferred = null;
 
-            if ($this->serverInitiatedClose) {
+            if ($this->serverInitiatedClose || $this->parseError) {
                 $deferred->fail($exception);
             } else {
                 $deferred->resolve(false);
@@ -177,7 +180,7 @@ final class Rfc6455Endpoint implements Endpoint {
             $this->currentMessageEmitter->fail($exception);
         }
 
-        if ($this->nextMessageDeferred && $this->serverInitiatedClose) {
+        if ($this->nextMessageDeferred && ($this->serverInitiatedClose || $this->parseError)) {
             $deferred = $this->nextMessageDeferred;
             $this->nextMessageDeferred = null;
             $deferred->fail(new ClosedException('The connection was closed: ' . $this->closeReason, $this->closeCode, $this->closeReason));
@@ -255,6 +258,7 @@ final class Rfc6455Endpoint implements Endpoint {
             return;
         }
 
+        $this->parseError = true;
         $this->close($code, $message);
     }
 
@@ -490,7 +494,7 @@ final class Rfc6455Endpoint implements Endpoint {
                     if ($lengthLong32Pair[1] !== 0 || $lengthLong32Pair[2] < 0) {
                         $this->onParsedError(
                             Code::MESSAGE_TOO_LARGE,
-                            'Payload exceeds maximum allowable size'
+                            'Received payload exceeds maximum allowable size'
                         );
                         return;
                     }
@@ -545,7 +549,7 @@ final class Rfc6455Endpoint implements Endpoint {
             if ($maxFrameSize && $frameLength > $maxFrameSize) {
                 $this->onParsedError(
                     Code::MESSAGE_TOO_LARGE,
-                    'Payload exceeds maximum allowable size'
+                    'Received payload exceeds maximum allowable size'
                 );
                 return;
             }
@@ -553,7 +557,7 @@ final class Rfc6455Endpoint implements Endpoint {
             if ($maxMsgSize && ($frameLength + $dataMsgBytesRecd) > $maxMsgSize) {
                 $this->onParsedError(
                     Code::MESSAGE_TOO_LARGE,
-                    'Payload exceeds maximum allowable size'
+                    'Received payload exceeds maximum allowable size'
                 );
                 return;
             }
