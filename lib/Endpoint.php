@@ -2,10 +2,9 @@
 
 namespace Amp\Websocket;
 
-use Amp\Iterator;
 use Amp\Promise;
 
-interface Endpoint extends Iterator {
+interface Endpoint {
     /**
      * Exposes all headers of the handshake response.
      *
@@ -60,9 +59,6 @@ interface Endpoint extends Iterator {
      */
     public function send(string $data): Promise;
 
-    /** @inheritdoc */
-    public function advance(): Promise;
-
     /**
      * Sends binary data to the remote.
      *
@@ -75,13 +71,12 @@ interface Endpoint extends Iterator {
     public function sendBinary(string $data): Promise;
 
     /**
-     * Gets the last message.
+     * Receive a message from the remote.
      *
-     * @return Message Message sent by the remote.
-     *
-     * @throws \Error If the promise returned from advance() resolved to false or didn't resolve yet.
+     * @return Promise<array<Message>|null> Resolves to message sent by the remote or `null` if the connection was
+     *     closed locally.
      */
-    public function getCurrent(): Message;
+    public function receive(): Promise;
 
     /**
      * Check whether the connection has been closed.

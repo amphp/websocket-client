@@ -37,9 +37,6 @@ final class Rfc6455Endpoint implements Endpoint {
     private $nextMessageDeferred;
 
     /** @var bool */
-    private $firstAdvance = true;
-
-    /** @var bool */
     private $serverInitiatedClose = false;
 
     /** @var bool */
@@ -156,7 +153,7 @@ final class Rfc6455Endpoint implements Endpoint {
             if ($this->serverInitiatedClose || $this->parseError) {
                 $deferred->fail($exception);
             } else {
-                $deferred->resolve(false);
+                $deferred->resolve();
             }
         }
 
@@ -245,8 +242,7 @@ final class Rfc6455Endpoint implements Endpoint {
             if ($this->nextMessageDeferred) {
                 $deferred = $this->nextMessageDeferred;
                 $this->nextMessageDeferred = null;
-                $this->messages = [new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary)];
-                $deferred->resolve(true);
+                $deferred->resolve([new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary)]);
             } else {
                 $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
             }
@@ -369,41 +365,25 @@ final class Rfc6455Endpoint implements Endpoint {
     }
 
     /** @inheritdoc */
-    public function advance(): Promise {
+    public function receive(): Promise {
         if ($this->nextMessageDeferred) {
-            throw new \Error('Await the previous promise returned from advance() before calling advance() again');
+            throw new \Error('Await the previous promise returned from receive() before calling receive() again.');
         }
 
         if ($this->isClosed()) {
             throw new \Error('The WebSocket connection has already been closed.');
         }
 
-        if ($this->firstAdvance && $this->messages) {
-            $this->firstAdvance = false;
-            return new Success(true);
-        }
-
-        $this->firstAdvance = false;
-
-        if (\count($this->messages) > 1) {
-            \reset($this->messages);
+        if ($this->messages) {
+            $message = \reset($this->messages);
             unset($this->messages[\key($this->messages)]);
 
-            return new Success(true);
+            return new Success([$message]);
         }
 
         $this->nextMessageDeferred = new Deferred;
 
         return $this->nextMessageDeferred->promise();
-    }
-
-    /** @inheritdoc */
-    public function getCurrent(): Message {
-        if (\count($this->messages)) {
-            return \reset($this->messages);
-        }
-
-        throw new \Error('Await the promise returned from advance() before calling getCurrent()');
     }
 
     /** @inheritdoc */

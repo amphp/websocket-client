@@ -13,8 +13,8 @@ Amp\Loop::run(function () {
 
     $i = 0;
 
-    while (yield $connection->advance()) {
-        $payload = yield $connection->getCurrent();
+    while (list($message) = yield $connection->receive()) {
+        $payload = yield $message;
 
         printf("Received: %s\n", $payload);
 

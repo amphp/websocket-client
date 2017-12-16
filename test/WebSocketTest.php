@@ -109,18 +109,17 @@ class WebSocketTest extends TestCase {
             $client = yield connect('ws://localhost:' . $port . '/');
             $client->sendBinary('Hey!');
 
-            yield $client->advance();
-
             /** @var Message $message */
-            $message = $client->getCurrent();
+            list($message) = yield $client->receive();
+
             $this->assertInstanceOf(Message::class, $message);
             $this->assertTrue($message->isBinary());
             $this->assertSame('Hey!', yield $message);
 
-            $promise = $client->advance();
+            $promise = $client->receive();
             $client->close();
 
-            $this->assertFalse(yield $promise);
+            $this->assertNull(yield $promise);
         }));
     }
 
@@ -140,18 +139,17 @@ class WebSocketTest extends TestCase {
             $client = yield connect('ws://localhost:' . $port . '/');
             $client->send('Hey!');
 
-            yield $client->advance();
-
             /** @var Message $message */
-            $message = $client->getCurrent();
+            list($message) = yield $client->receive();
+
             $this->assertInstanceOf(Message::class, $message);
             $this->assertFalse($message->isBinary());
             $this->assertSame('Hey!', yield $message);
 
-            $promise = $client->advance();
+            $promise = $client->receive();
             $client->close();
 
-            $this->assertFalse(yield $promise);
+            $this->assertNull(yield $promise);
         }));
     }
 
@@ -167,8 +165,8 @@ class WebSocketTest extends TestCase {
             /** @var Endpoint $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
-            yield $client->advance();
-            $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $client->getCurrent());
+            list($message) = yield $client->receive();
+            $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $message);
         }));
     }
 
@@ -184,11 +182,11 @@ class WebSocketTest extends TestCase {
             /** @var Endpoint $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
-            yield $client->advance();
+            list($message) = yield $client->receive();
 
             $this->expectException(WebSocketException::class);
             $this->expectExceptionMessage('The connection was closed: Received payload exceeds maximum allowable size');
-            yield $client->getCurrent();
+            yield $message;
         }));
     }
 }
