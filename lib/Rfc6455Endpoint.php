@@ -110,18 +110,22 @@ final class Rfc6455Endpoint implements Endpoint {
         Loop::cancel($this->timeoutWatcher);
     }
 
+    /** @inheritdoc */
     public function getHeaders(): array {
         return $this->headers;
     }
 
+    /** @inheritdoc */
     public function getHeader(string $field) {
         return $this->headers[\strtolower($field)][0] ?? null;
     }
 
+    /** @inheritdoc */
     public function getHeaderArray(string $field): array {
         return $this->headers[\strtolower($field)] ?? [];
     }
 
+    /** @inheritdoc */
     public function close(int $code = Code::NORMAL_CLOSE, string $reason = '') {
         // Only proceed if we haven't already begun the close handshake elsewhere
         if ($this->closedAt) {
@@ -154,6 +158,7 @@ final class Rfc6455Endpoint implements Endpoint {
         // Don't unload the client here, it will be unloaded upon timeout
     }
 
+    /** @inheritdoc */
     public function isClosed(): bool {
         return (bool) $this->closedAt;
     }
@@ -313,6 +318,7 @@ final class Rfc6455Endpoint implements Endpoint {
         return $this->socket->write($frame);
     }
 
+    /** @inheritdoc */
     public function send(string $data): Promise {
         $this->messagesSent++;
 
@@ -321,6 +327,7 @@ final class Rfc6455Endpoint implements Endpoint {
         return $this->lastWrite = new Coroutine($this->doSend(self::OP_TEXT, $data));
     }
 
+    /** @inheritdoc */
     public function sendBinary(string $data): Promise {
         $this->messagesSent++;
 
@@ -378,13 +385,7 @@ final class Rfc6455Endpoint implements Endpoint {
         return $this->nextMessageDeferred->promise();
     }
 
-    /**
-     * Gets the last message.
-     *
-     * @return Message Message sent by the remote.
-     *
-     * @throws \Error If the promise returned from advance() resolved to false or didn't resolve yet.
-     */
+    /** @inheritdoc */
     public function getCurrent(): Message {
         if (\count($this->messages)) {
             return \reset($this->messages);
@@ -393,6 +394,7 @@ final class Rfc6455Endpoint implements Endpoint {
         throw new \Error('Await the promise returned from advance() before calling getCurrent()');
     }
 
+    /** @inheritdoc */
     public function getInfo(): array {
         return [
             'bytes_read' => $this->bytesRead,
