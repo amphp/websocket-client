@@ -4,14 +4,13 @@
 [![CoverageStatus](https://img.shields.io/coveralls/amphp/websocket/master.svg?style=flat-square)](https://coveralls.io/github/amphp/websocket?branch=master)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
 
-
-`amphp/websocket` is a non-blocking websocket client for use with the [`amp`](https://github.com/amphp/amp) concurrency framework.
+`amphp/websocket` is an async WebSocket client for PHP based on Amp.
 
 ## Installation
 
 This package can be installed as a [Composer](https://getcomposer.org/) dependency.
 
-```bash
+```
 composer require amphp/websocket
 ```
 
@@ -54,6 +53,7 @@ Amp\Loop::run(function () {
     }
 });
 ```
+
 ## Versioning
 
 `amphp/websocket` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
