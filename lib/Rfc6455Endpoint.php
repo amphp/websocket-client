@@ -652,10 +652,10 @@ final class Rfc6455Endpoint implements Endpoint {
                                 return;
                             }
 
-                            $endpoint->onParsedData(self::OP_BIN, $payload, false);
+                            $endpoint->onParsedData($opcode, $payload, false);
                             $payload = $i > 0 ? \substr($string, -$i) : '';
                         } else {
-                            $endpoint->onParsedData(self::OP_BIN, $payload, false);
+                            $endpoint->onParsedData($opcode, $payload, false);
                             $payload = '';
                         }
 
@@ -722,7 +722,7 @@ final class Rfc6455Endpoint implements Endpoint {
                     }
                     $nextEmit = $dataMsgBytesRecd + $emitThreshold;
 
-                    $endpoint->onParsedData(self::OP_BIN, $payload, $fin);
+                    $endpoint->onParsedData($opcode, $payload, $fin);
                 }
             } else {
                 $dataArr[] = $payload;

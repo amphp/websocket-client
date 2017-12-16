@@ -124,8 +124,6 @@ class WebSocketTest extends TestCase {
     }
 
     public function testSimpleTextEcho() {
-        $this->markTestSkipped('This test currently fails, as all frames are reported as OP_BIN');
-
         wait(call(function () {
             $port = yield $this->createServer(new class extends WebsocketAdapter {
                 public function onData(int $clientId, Websocket\Message $msg) {
