@@ -34,8 +34,8 @@ Amp\Loop::run(function () {
 
     $i = 0;
 
-    while (list($message) = yield $connection->receive()) {
-        $payload = yield $message;
+    while ($message = yield $connection->receive()) {
+        $payload = yield $message->buffer();
         printf("Received: %s\n", $payload);
 
         if ($payload === "Goodbye!") {

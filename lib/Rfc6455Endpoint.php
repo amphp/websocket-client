@@ -242,7 +242,7 @@ final class Rfc6455Endpoint implements Endpoint {
             if ($this->nextMessageDeferred) {
                 $deferred = $this->nextMessageDeferred;
                 $this->nextMessageDeferred = null;
-                $deferred->resolve([new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary)]);
+                $deferred->resolve(new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary));
             } else {
                 $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
             }
@@ -378,7 +378,7 @@ final class Rfc6455Endpoint implements Endpoint {
             $message = \reset($this->messages);
             unset($this->messages[\key($this->messages)]);
 
-            return new Success([$message]);
+            return new Success($message);
         }
 
         $this->nextMessageDeferred = new Deferred;

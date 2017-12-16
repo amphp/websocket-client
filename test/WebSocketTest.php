@@ -110,11 +110,11 @@ class WebSocketTest extends TestCase {
             $client->sendBinary('Hey!');
 
             /** @var Message $message */
-            list($message) = yield $client->receive();
+            $message = yield $client->receive();
 
             $this->assertInstanceOf(Message::class, $message);
             $this->assertTrue($message->isBinary());
-            $this->assertSame('Hey!', yield $message);
+            $this->assertSame('Hey!', yield $message->buffer());
 
             $promise = $client->receive();
             $client->close();
@@ -140,11 +140,11 @@ class WebSocketTest extends TestCase {
             $client->send('Hey!');
 
             /** @var Message $message */
-            list($message) = yield $client->receive();
+            $message = yield $client->receive();
 
             $this->assertInstanceOf(Message::class, $message);
             $this->assertFalse($message->isBinary());
-            $this->assertSame('Hey!', yield $message);
+            $this->assertSame('Hey!', yield $message->buffer());
 
             $promise = $client->receive();
             $client->close();
@@ -165,8 +165,9 @@ class WebSocketTest extends TestCase {
             /** @var Endpoint $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
-            list($message) = yield $client->receive();
-            $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $message);
+            /** @var Message $message */
+            $message = yield $client->receive();
+            $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $message->buffer());
         }));
     }
 
@@ -182,11 +183,12 @@ class WebSocketTest extends TestCase {
             /** @var Endpoint $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
-            list($message) = yield $client->receive();
+            /** @var Message $message */
+            $message = yield $client->receive();
 
             $this->expectException(WebSocketException::class);
             $this->expectExceptionMessage('The connection was closed: Received payload exceeds maximum allowable size');
-            yield $message;
+            yield $message->buffer();
         }));
     }
 }
