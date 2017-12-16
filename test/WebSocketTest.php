@@ -153,6 +153,38 @@ class WebSocketTest extends TestCase {
         }));
     }
 
+    public function testUnconsumedMessage() {
+        wait(call(function () {
+            $port = yield $this->createServer(new class extends WebsocketAdapter {
+                public function onOpen(int $clientId, $handshakeData) {
+                    yield $this->endpoint->send(\str_repeat('.', 1024 * 1024 * 1), $clientId);
+                    yield $this->endpoint->send('Message', $clientId);
+                }
+            });
+
+            /** @var Connection $client */
+            $client = yield connect('ws://localhost:' . $port . '/');
+
+            /** @var Message $message */
+            $message = yield $client->receive();
+
+            $this->assertInstanceOf(Message::class, $message);
+            // Do not consume the bytes from the first message.
+            unset($message);
+
+            $message = yield $client->receive();
+            $this->assertFalse($message->isBinary());
+            $this->assertSame('Message', yield $message->buffer());
+
+            $this->assertInstanceOf(Message::class, $message);
+
+            $promise = $client->receive();
+            $client->close();
+
+            $this->assertNull(yield $promise);
+        }));
+    }
+
     public function testVeryLongMessage() {
         wait(call(function () {
             $port = yield $this->createServer(new class extends WebsocketAdapter {

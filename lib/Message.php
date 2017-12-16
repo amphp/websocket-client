@@ -23,6 +23,9 @@ final class Message implements InputStream {
     /** @var \Amp\Promise|null */
     private $promise;
 
+    /** @var \Amp\Promise|null */
+    private $lastRead;
+
     public function __construct(InputStream $stream, bool $binary) {
         $this->stream = $stream;
         $this->binary = $binary;
@@ -36,7 +39,11 @@ final class Message implements InputStream {
 
     private function consume(): \Generator {
         try {
-            while (yield $this->stream->read() !== null) {
+            if ($this->lastRead && null === yield $this->lastRead) {
+                return;
+            }
+
+            while (null !== yield $this->stream->read()) {
                 // Discard unread bytes from message.
             }
         } catch (\Throwable $exception) {
@@ -61,7 +68,7 @@ final class Message implements InputStream {
             throw new \Error("Cannot stream message data once a buffered message has been requested");
         }
 
-        return $this->stream->read();
+        return $this->lastRead = $this->stream->read();
     }
 
     /**
@@ -76,6 +83,10 @@ final class Message implements InputStream {
 
         return $this->promise = call(function () {
             $buffer = '';
+            if ($this->lastRead && null === yield $this->lastRead) {
+                return $buffer;
+            }
+
             while (null !== $chunk = yield $this->stream->read()) {
                 $buffer .= $chunk;
             }
