@@ -7,7 +7,6 @@ use Aerys\Host;
 use Aerys\Server;
 use Aerys\ServerObserver;
 use Aerys\Websocket;
-use Amp\Loop;
 use Amp\PHPUnit\TestCase;
 use Amp\Promise;
 use Amp\Success;
