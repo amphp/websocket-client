@@ -11,7 +11,7 @@ use Amp\Promise;
 use Amp\Socket\Socket;
 use Amp\Success;
 
-final class Rfc6455Endpoint implements Endpoint {
+final class Rfc6455Connection implements Connection {
     /** @var Options */
     private $options;
 

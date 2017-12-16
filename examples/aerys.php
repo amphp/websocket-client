@@ -7,7 +7,7 @@ use Amp\Websocket;
 
 // Connects to the websocket endpoint in demo.php provided with Aerys (https://github.com/amphp/aerys).
 Amp\Loop::run(function () {
-    /** @var \Amp\Websocket\Endpoint $connection */
+    /** @var \Amp\Websocket\Connection $connection */
     $connection = yield Websocket\connect('ws://localhost:1337/ws');
     yield $connection->send('Hello!');
 

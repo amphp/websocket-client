@@ -10,7 +10,7 @@ use Aerys\Websocket;
 use Amp\PHPUnit\TestCase;
 use Amp\Promise;
 use Amp\Success;
-use Amp\Websocket\Endpoint;
+use Amp\Websocket\Connection;
 use Amp\Websocket\Message;
 use Amp\Websocket\Test\Helper\WebsocketAdapter;
 use Amp\Websocket\WebSocketException;
@@ -105,7 +105,7 @@ class WebSocketTest extends TestCase {
                 }
             });
 
-            /** @var Endpoint $client */
+            /** @var Connection $client */
             $client = yield connect('ws://localhost:' . $port . '/');
             $client->sendBinary('Hey!');
 
@@ -135,7 +135,7 @@ class WebSocketTest extends TestCase {
                 }
             });
 
-            /** @var Endpoint $client */
+            /** @var Connection $client */
             $client = yield connect('ws://localhost:' . $port . '/');
             $client->send('Hey!');
 
@@ -162,7 +162,7 @@ class WebSocketTest extends TestCase {
                 }
             });
 
-            /** @var Endpoint $client */
+            /** @var Connection $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
             /** @var Message $message */
@@ -180,7 +180,7 @@ class WebSocketTest extends TestCase {
                 }
             });
 
-            /** @var Endpoint $client */
+            /** @var Connection $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
             /** @var Message $message */

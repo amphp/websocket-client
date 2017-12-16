@@ -50,7 +50,7 @@ function connect($handshake, ClientConnectContext $connectContext = null, Client
 
                 $headers = $handshake->decodeResponse($headerBuffer);
 
-                return new Rfc6455Endpoint($socket, $headers, $buffer, $options);
+                return new Rfc6455Connection($socket, $headers, $buffer, $options);
             }
         }
 

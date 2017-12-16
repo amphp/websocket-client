@@ -4,7 +4,7 @@ namespace Amp\Websocket;
 
 use Amp\Promise;
 
-interface Endpoint {
+interface Connection {
     /**
      * Exposes all headers of the handshake response.
      *
@@ -55,7 +55,7 @@ interface Endpoint {
      *
      * @return Promise
      *
-     * @see Endpoint::sendBinary()
+     * @see Connection::sendBinary()
      */
     public function send(string $data): Promise;
 
@@ -66,7 +66,7 @@ interface Endpoint {
      *
      * @return Promise
      *
-     * @see Endpoint::send()
+     * @see Connection::send()
      */
     public function sendBinary(string $data): Promise;
 
