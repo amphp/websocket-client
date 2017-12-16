@@ -8,7 +8,7 @@ final class Options {
     use Struct;
 
     private $streamThreshold = 32768;
-    private $autoFrameSize = 32768;
+    private $frameSplitThreshold = 32768;
     private $maximumFrameSize = 2097152;
     private $maximumMessageSize = 10485760;
     private $textOnly = false;
@@ -30,17 +30,17 @@ final class Options {
         return $clone;
     }
 
-    public function getAutoFrameSize(): int {
-        return $this->maximumFrameSize;
+    public function getFrameSplitThreshold(): int {
+        return $this->frameSplitThreshold;
     }
 
-    public function withAutoFrameSize(int $autoFrameSize): self {
-        if ($autoFrameSize < 1) {
-            throw new \Error('$autoFrameSize must be a positive integer greater than 0');
+    public function withFrameSplitThreshold(int $frameSplitThreshold): self {
+        if ($frameSplitThreshold < 1) {
+            throw new \Error('$frameSplitThreshold must be a positive integer greater than 0');
         }
 
         $clone = clone $this;
-        $clone->autoFrameSize = $autoFrameSize;
+        $clone->frameSplitThreshold = $frameSplitThreshold;
 
         return $clone;
     }

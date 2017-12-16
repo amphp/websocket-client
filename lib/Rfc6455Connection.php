@@ -329,9 +329,9 @@ final class Rfc6455Connection implements Connection {
         try {
             $bytes = 0;
 
-            if (\strlen($data) > 1.5 * $this->options->getAutoFrameSize()) {
+            if (\strlen($data) > $this->options->getFrameSplitThreshold()) {
                 $len = \strlen($data);
-                $slices = \ceil($len / $this->options->getAutoFrameSize());
+                $slices = \ceil($len / $this->options->getFrameSplitThreshold());
                 $chunks = \str_split($data, \ceil($len / $slices));
                 $final = \array_pop($chunks);
                 foreach ($chunks as $chunk) {
