@@ -37,6 +37,9 @@ final class Rfc6455Endpoint implements Endpoint {
     private $nextMessageDeferred;
 
     /** @var bool */
+    private $firstAdvance = true;
+
+    /** @var bool */
     private $serverInitiatedClose = false;
 
     /** @var bool */
@@ -100,6 +103,8 @@ final class Rfc6455Endpoint implements Endpoint {
         $this->parser = $this->parser();
 
         if ($buffer !== '') {
+            $this->lastReadAt = \time();
+            $this->bytesRead += \strlen($buffer);
             $this->framesRead += $this->parser->send($buffer);
         }
 
@@ -372,6 +377,13 @@ final class Rfc6455Endpoint implements Endpoint {
         if ($this->isClosed()) {
             throw new \Error('The WebSocket connection has already been closed.');
         }
+
+        if ($this->firstAdvance && $this->messages) {
+            $this->firstAdvance = false;
+            return new Success(true);
+        }
+
+        $this->firstAdvance = false;
 
         if (\count($this->messages) > 1) {
             \reset($this->messages);
