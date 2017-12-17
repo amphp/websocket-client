@@ -99,7 +99,7 @@ final class Handshake {
         }
 
         $connection = $headers['connection'][0] ?? '';
-        if (!\in_array('upgrade', array_map('trim', array_map('strtolower', explode(',', $connection))), true)) {
+        if (!\in_array('upgrade', \array_map('trim', \array_map('strtolower', \explode(',', $connection))), true)) {
             throw new WebSocketException('Missing "Connection: upgrade" header.');
         }
 
