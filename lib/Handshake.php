@@ -67,9 +67,9 @@ final class Handshake {
             }
         }
 
-        if ($this->accept === null) {
-            $this->accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
-        }
+        // This has to be generated for each connect attempt, once a new request has been generated,
+        // we use the new key for validation.
+        $this->accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
 
         return 'GET ' . $this->path . " HTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Version: 13\r\nSec-Websocket-Key: {$this->accept}\r\n$headers\r\n";
     }
