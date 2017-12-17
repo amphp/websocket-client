@@ -25,7 +25,7 @@ final class Handshake {
 
         $this->remoteAddress = $host . ':' . $port;
 
-        if ($url['port'] !== $defaultPort) {
+        if ($port !== $defaultPort) {
             $host .= ':' . $port;
         }
 
