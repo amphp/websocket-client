@@ -232,6 +232,12 @@ final class Rfc6455Connection implements Connection {
         $this->lastDataReadAt = \time();
 
         if (!$this->currentMessageEmitter) {
+            if ($opcode === self::OP_CONT) {
+                $this->onParsedError(Code::PROTOCOL_ERROR, 'Nothing to continue');
+
+                return;
+            }
+
             $binary = $opcode === self::OP_BIN;
 
             $this->currentMessageEmitter = new Emitter;
@@ -628,6 +634,10 @@ final class Rfc6455Connection implements Connection {
                             $payload = '';
                         }
 
+                        if ($this->parseError) {
+                            return;
+                        }
+
                         $frameLength -= $frameBytesRecd;
                         $nextEmit = $dataMsgBytesRecd + $emitThreshold;
                         $frameBytesRecd = 0;
@@ -690,6 +700,10 @@ final class Rfc6455Connection implements Connection {
                     $nextEmit = $dataMsgBytesRecd + $emitThreshold;
 
                     $this->onParsedData($opcode, $payload, $fin);
+
+                    if ($this->parseError) {
+                        return;
+                    }
                 }
             } else {
                 $dataArr[] = $payload;
