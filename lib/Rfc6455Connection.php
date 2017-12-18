@@ -438,11 +438,23 @@ final class Rfc6455Connection implements Connection {
             $bufferSize -= 2;
 
             $fin = (bool) ($firstByte & 0b10000000);
-            // $rsv = ($firstByte & 0b01110000) >> 4; // unused (let's assume the bits are all zero)
+            $rsv = ($firstByte & 0b01110000) >> 4;
             $opcode = $firstByte & 0b00001111;
             $isMasked = (bool) ($secondByte & 0b10000000);
             $maskingKey = null;
             $frameLength = $secondByte & 0b01111111;
+
+            if ($rsv !== 0) {
+                $this->onParsedError(Code::PROTOCOL_ERROR, 'RSV must be 0 if no extensions are negotiated');
+            }
+
+            if ($opcode >= 3 && $opcode <= 7) {
+                $this->onParsedError(Code::PROTOCOL_ERROR, 'Use of reserved non-control frame opcode');
+            }
+
+            if ($opcode >= 11 && $opcode <= 15) {
+                $this->onParsedError(Code::PROTOCOL_ERROR, 'Use of reserved control frame opcode');
+            }
 
             $isControlFrame = $opcode >= 0x08;
             if ($validateUtf8 && $opcode !== self::OP_CONT && !$isControlFrame) {
