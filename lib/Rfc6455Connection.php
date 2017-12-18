@@ -200,17 +200,30 @@ final class Rfc6455Connection implements Connection {
                 if ($this->closedAt) {
                     $this->unloadServer();
                 } else {
-                    if (\strlen($data) < 2) {
-                        return; // invalid close reason
+                    $length = \strlen($data);
+                    if ($length === 0) {
+                        $this->close();
+                        return;
+                    } elseif ($length < 2) {
+                        $this->close(Code::PROTOCOL_ERROR, 'Close code must be two bytes');
+                        return;
                     }
                     $code = \current(\unpack('S', \substr($data, 0, 2)));
                     $reason = \substr($data, 2);
 
                     $this->serverInitiatedClose = true;
+
+                    // Note: There's a test for 1004, but only 1005 and 1006 must not be used for closing by an endpoint
+                    if ($code < 1000 || $code === 1005 || $code === 1006 || $code === 1015) {
+                        $this->close(Code::PROTOCOL_ERROR, 'Invalid close code');
+
+                        return;
+                    }
+
                     if ($this->options->isValidateUtf8() && !\preg_match('//u', $reason)) {
                         $this->close(Code::INCONSISTENT_FRAME_DATA_TYPE, 'Close reason must be valid UTF-8');
                     } else {
-                        $this->close($code, $reason);
+                        $this->close();
                     }
                 }
                 break;
