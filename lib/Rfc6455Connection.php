@@ -203,7 +203,11 @@ final class Rfc6455Connection implements Connection {
                     $reason = \substr($data, 2);
 
                     $this->serverInitiatedClose = true;
-                    $this->close($code, $reason);
+                    if ($this->options->isValidateUtf8() && !\preg_match('//u', $reason)) {
+                        $this->close(Code::INCONSISTENT_FRAME_DATA_TYPE, 'Close reason must be valid UTF-8');
+                    } else {
+                        $this->close($code, $reason);
+                    }
                 }
                 break;
 
