@@ -127,7 +127,9 @@ final class Rfc6455Connection implements Connection {
         $exception = new ClosedException('The connection was closed: ' . $reason, $code, $reason);
 
         if ($this->currentMessageEmitter) {
-            $this->currentMessageEmitter->fail($exception);
+            $emitter = $this->currentMessageEmitter;
+            $this->currentMessageEmitter = null;
+            $emitter->fail($exception);
         }
 
         if ($this->nextMessageDeferred) {
@@ -368,6 +370,14 @@ final class Rfc6455Connection implements Connection {
             throw new \Error('Await the previous promise returned from receive() before calling receive() again.');
         }
 
+        // There might be messages already buffered and a close frame already received
+        if ($this->messages) {
+            $message = \reset($this->messages);
+            unset($this->messages[\key($this->messages)]);
+
+            return new Success($message);
+        }
+
         if ($this->isClosed()) {
             // User kept in while loop after previous promise already resolved
             if ($this->serverInitiatedClose) {
@@ -377,13 +387,6 @@ final class Rfc6455Connection implements Connection {
             // Might happen if close() is called outside the receive coroutine.
             // Succeed with null instead of erroring out just as with a pending receive on close.
             return new Success;
-        }
-
-        if ($this->messages) {
-            $message = \reset($this->messages);
-            unset($this->messages[\key($this->messages)]);
-
-            return new Success($message);
         }
 
         $this->nextMessageDeferred = new Deferred;
