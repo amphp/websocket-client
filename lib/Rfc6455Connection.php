@@ -27,6 +27,8 @@ final class Rfc6455Connection implements Connection {
     public $pingCount = 0;
     public $pongCount = 0;
 
+    private $emitBuffer = "";
+
     /** @var Emitter */
     private $currentMessageEmitter;
 
@@ -251,8 +253,13 @@ final class Rfc6455Connection implements Connection {
             }
         }
 
-        $promise = $this->currentMessageEmitter->emit($data);
-        $this->lastEmit = $this->nextMessageDeferred ? null : $promise;
+        $this->emitBuffer .= $data;
+
+        if ($terminated || \strlen($this->emitBuffer) >= $this->options->getStreamThreshold()) {
+            $promise = $this->currentMessageEmitter->emit($this->emitBuffer);
+            $this->lastEmit = $this->nextMessageDeferred ? null : $promise;
+            $this->emitBuffer = '';
+        }
 
         if ($terminated) {
             $emitter = $this->currentMessageEmitter;
@@ -425,15 +432,13 @@ final class Rfc6455Connection implements Connection {
      */
     private function parser(): \Generator {
         // @TODO add minimum average frame size rate threshold to prevent tiny-frame DoS
-        $emitThreshold = $this->options->getStreamThreshold();
         $maxFrameSize = $this->options->getMaximumFrameSize();
         $maxMsgSize = $this->options->getMaximumMessageSize();
         $textOnly = $this->options->isTextOnly();
         $doUtf8Validation = $validateUtf8 = $this->options->isValidateUtf8();
 
         $dataMsgBytesRecd = 0;
-        $nextEmit = $emitThreshold;
-        $dataArr = [];
+        $savedBuffer = '';
 
         $buffer = yield;
         $offset = 0;
@@ -600,17 +605,16 @@ final class Rfc6455Connection implements Connection {
                 do {
                     // if we want to validate UTF8, we must *not* send incremental mid-frame updates because the message might be broken in the middle of an utf-8 sequence
                     // also, control frames always are <= 125 bytes, so we never will need this as per https://tools.ietf.org/html/rfc6455#section-5.5
-                    if (!$isControlFrame && $dataMsgBytesRecd >= $nextEmit) {
+                    if (!$isControlFrame) {
                         if ($isMasked) {
                             $payload ^= \str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
                             // Shift the mask so that the next data where the mask is used on has correct offset.
                             $maskingKey = \substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
                         }
 
-                        if ($dataArr) {
-                            $dataArr[] = $payload;
-                            $payload = \implode($dataArr);
-                            $dataArr = [];
+                        if ($savedBuffer !== '') {
+                            $payload = $savedBuffer . $payload;
+                            $savedBuffer = '';
                         }
 
                         if ($doUtf8Validation) {
@@ -639,7 +643,6 @@ final class Rfc6455Connection implements Connection {
                         }
 
                         $frameLength -= $frameBytesRecd;
-                        $nextEmit = $dataMsgBytesRecd + $emitThreshold;
                         $frameBytesRecd = 0;
                     }
 
@@ -663,50 +666,44 @@ final class Rfc6455Connection implements Connection {
                 $bufferSize -= $dataLen;
             }
 
-            if ($fin || $dataMsgBytesRecd >= $emitThreshold) {
-                if ($isControlFrame) {
-                    $this->onParsedControlFrame($opcode, $payload);
-                } else {
-                    if ($dataArr) {
-                        $dataArr[] = $payload;
-                        $payload = \implode($dataArr);
-                        $dataArr = [];
-                    }
+            if ($isControlFrame) {
+                $this->onParsedControlFrame($opcode, $payload);
+            } else {
+                if ($savedBuffer !== '') {
+                    $payload = $savedBuffer . $payload;
+                    $savedBuffer = '';
+                }
 
-                    if ($doUtf8Validation) {
-                        if ($fin) {
-                            $i = \preg_match('//u', $payload) ? 0 : 8;
-                        } else {
-                            $string = $payload;
-                            for ($i = 0; !\preg_match('//u', $payload) && $i < 8; $i++) {
-                                $payload = \substr($payload, 0, -1);
-                            }
-                            if ($i > 0) {
-                                $dataArr[] = \substr($string, -$i);
-                            }
-                        }
-                        if ($i === 8) {
-                            $this->onParsedError(
-                                Code::INCONSISTENT_FRAME_DATA_TYPE,
-                                'Invalid TEXT data; UTF-8 required'
-                            );
-                            return;
-                        }
-                    }
-
+                if ($doUtf8Validation) {
                     if ($fin) {
-                        $dataMsgBytesRecd = 0;
+                        $i = \preg_match('//u', $payload) ? 0 : 8;
+                    } else {
+                        $string = $payload;
+                        for ($i = 0; !\preg_match('//u', $payload) && $i < 8; $i++) {
+                            $payload = \substr($payload, 0, -1);
+                        }
+                        if ($i > 0) {
+                            $savedBuffer = \substr($string, -$i);
+                        }
                     }
-                    $nextEmit = $dataMsgBytesRecd + $emitThreshold;
-
-                    $this->onParsedData($opcode, $payload, $fin);
-
-                    if ($this->parseError) {
+                    if ($i === 8) {
+                        $this->onParsedError(
+                            Code::INCONSISTENT_FRAME_DATA_TYPE,
+                            'Invalid TEXT data; UTF-8 required'
+                        );
                         return;
                     }
                 }
-            } else {
-                $dataArr[] = $payload;
+
+                if ($fin) {
+                    $dataMsgBytesRecd = 0;
+                }
+
+                $this->onParsedData($opcode, $payload, $fin);
+
+                if ($this->parseError) {
+                    return;
+                }
             }
 
             $frames++;
