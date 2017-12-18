@@ -369,7 +369,14 @@ final class Rfc6455Connection implements Connection {
         }
 
         if ($this->isClosed()) {
-            throw new \Error('The WebSocket connection has already been closed.');
+            // User kept in while loop after previous promise already resolved
+            if ($this->serverInitiatedClose) {
+                throw new \Error('The WebSocket connection has already been closed.');
+            }
+
+            // Might happen if close() is called outside the receive coroutine.
+            // Succeed with null instead of erroring out just as with a pending receive on close.
+            return new Success;
         }
 
         if ($this->messages) {
