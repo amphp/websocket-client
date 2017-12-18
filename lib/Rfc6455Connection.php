@@ -546,15 +546,6 @@ final class Rfc6455Connection implements Connection {
                     );
                     return;
                 }
-            } elseif (($opcode === 0x00) === ($dataMsgBytesRecd === 0)) {
-                // We deliberately do not accept a non-fin empty initial text frame
-                $code = Code::PROTOCOL_ERROR;
-                $errorMsg = $opcode === 0x00
-                    ? 'Illegal CONTINUATION opcode; initial message payload frame must be TEXT or BINARY'
-                    : 'Illegal data type opcode after unfinished previous data type frame; opcode MUST be CONTINUATION';
-
-                $this->onParsedError($code, $errorMsg);
-                return;
             }
 
             if ($maxFrameSize && $frameLength > $maxFrameSize) {
