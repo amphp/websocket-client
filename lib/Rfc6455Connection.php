@@ -251,6 +251,10 @@ final class Rfc6455Connection implements Connection {
             } else {
                 $this->messages[] = new Message(new IteratorStream($this->currentMessageEmitter->iterate()), $binary);
             }
+        } elseif ($opcode !== self::OP_CONT) {
+            $this->onParsedError(Code::PROTOCOL_ERROR, 'Non-terminated message was not continued');
+
+            return;
         }
 
         $this->emitBuffer .= $data;
@@ -586,85 +590,20 @@ final class Rfc6455Connection implements Connection {
                 return;
             }
 
-            if ($bufferSize >= $frameLength) {
-                if (!$isControlFrame) {
-                    $dataMsgBytesRecd += $frameLength;
-                }
-
-                $payload = \substr($buffer, $offset, $frameLength);
-                $offset += $frameLength;
-                $bufferSize -= $frameLength;
-            } else {
-                if (!$isControlFrame) {
-                    $dataMsgBytesRecd += $bufferSize;
-                }
-                $frameBytesRecd = $bufferSize;
-
-                $payload = \substr($buffer, $offset);
-
-                do {
-                    // if we want to validate UTF8, we must *not* send incremental mid-frame updates because the message might be broken in the middle of an utf-8 sequence
-                    // also, control frames always are <= 125 bytes, so we never will need this as per https://tools.ietf.org/html/rfc6455#section-5.5
-                    if (!$isControlFrame) {
-                        if ($isMasked) {
-                            $payload ^= \str_repeat($maskingKey, ($frameBytesRecd + 3) >> 2);
-                            // Shift the mask so that the next data where the mask is used on has correct offset.
-                            $maskingKey = \substr($maskingKey . $maskingKey, $frameBytesRecd % 4, 4);
-                        }
-
-                        if ($savedBuffer !== '') {
-                            $payload = $savedBuffer . $payload;
-                            $savedBuffer = '';
-                        }
-
-                        if ($doUtf8Validation) {
-                            $string = $payload;
-                            /* @TODO: check how many bits are set to 1 instead of multiple (slow) preg_match()es and substr()s */
-                            for ($i = 0; !\preg_match('//u', $payload) && $i < 8; $i++) {
-                                $payload = \substr($payload, 0, -1);
-                            }
-                            if ($i === 8) {
-                                $this->onParsedError(
-                                    Code::INCONSISTENT_FRAME_DATA_TYPE,
-                                    'Invalid TEXT data; UTF-8 required'
-                                );
-                                return;
-                            }
-
-                            $this->onParsedData($opcode, $payload, false);
-                            $payload = $i > 0 ? \substr($string, -$i) : '';
-                        } else {
-                            $this->onParsedData($opcode, $payload, false);
-                            $payload = '';
-                        }
-
-                        if ($this->parseError) {
-                            return;
-                        }
-
-                        $frameLength -= $frameBytesRecd;
-                        $frameBytesRecd = 0;
-                    }
-
-                    $buffer = yield $frames;
-                    $bufferSize = \strlen($buffer);
-                    $frames = 0;
-
-                    $dataLen = $bufferSize + $frameBytesRecd >= $frameLength
-                        ? $frameLength - $frameBytesRecd
-                        : $bufferSize;
-
-                    if (!$isControlFrame) {
-                        $dataMsgBytesRecd += $dataLen;
-                    }
-
-                    $payload .= \substr($buffer, 0, $dataLen);
-                    $frameBytesRecd += $dataLen;
-                } while ($frameBytesRecd !== $frameLength);
-
-                $offset = $dataLen;
-                $bufferSize -= $dataLen;
+            while ($bufferSize < $frameLength) {
+                $chunk = yield $frames;
+                $buffer .= $chunk;
+                $bufferSize += \strlen($chunk);
+                $frames = 0;
             }
+
+            if (!$isControlFrame) {
+                $dataMsgBytesRecd += $frameLength;
+            }
+
+            $payload = \substr($buffer, $offset, $frameLength);
+            $offset += $frameLength;
+            $bufferSize -= $frameLength;
 
             if ($isControlFrame) {
                 $this->onParsedControlFrame($opcode, $payload);
