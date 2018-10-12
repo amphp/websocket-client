@@ -1,5 +1,5 @@
 {
-    "name": "amphp/websocket",
+    "name": "amphp/websocket-client",
     "description": "Async WebSocket client for PHP based on Amp.",
     "license": "MIT",
     "authors": [
@@ -17,7 +17,7 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/amphp/websocket/issues"
+        "issues": "https://github.com/amphp/websocket-client/issues"
     },
     "keywords": [
         "async",
