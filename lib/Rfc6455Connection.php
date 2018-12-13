@@ -208,7 +208,8 @@ final class Rfc6455Connection implements Connection {
                         $this->close(Code::PROTOCOL_ERROR, 'Close code must be two bytes');
                         return;
                     }
-                    $code = \current(\unpack('S', \substr($data, 0, 2)));
+
+                    $code = \current(\unpack('n', \substr($data, 0, 2)));
                     $reason = \substr($data, 2);
 
                     $this->serverInitiatedClose = true;
@@ -223,7 +224,7 @@ final class Rfc6455Connection implements Connection {
                     if ($this->options->isValidateUtf8() && !\preg_match('//u', $reason)) {
                         $this->close(Code::INCONSISTENT_FRAME_DATA_TYPE, 'Close reason must be valid UTF-8');
                     } else {
-                        $this->close();
+                        $this->close($code, $reason);
                     }
                 }
                 break;
