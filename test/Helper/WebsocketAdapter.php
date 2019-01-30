@@ -2,35 +2,22 @@
 
 namespace Amp\Websocket\Test\Helper;
 
-use Aerys\Request;
-use Aerys\Response;
-use Aerys\Websocket;
+use Amp\Http\Server\Request;
+use Amp\Http\Server\Response;
+use Amp\Http\Server\Websocket;
+use Amp\Http\Server\Websocket\Message;
 
-class WebsocketAdapter implements Websocket {
-    /** @var Websocket\Endpoint */
-    protected $endpoint;
-
-    public function onStart(Websocket\Endpoint $endpoint) {
-        $this->endpoint = $endpoint;
-    }
-
+class WebsocketAdapter extends Websocket\Websocket {
     public function onHandshake(Request $request, Response $response) {
-        // nothing to do
+        return $response;
     }
 
-    public function onOpen(int $clientId, $handshakeData) {
-        // nothing to do
+    public function onOpen(int $clientId, Request $request){
     }
 
-    public function onData(int $clientId, Websocket\Message $msg) {
-        // nothing to do
+    public function onData(int $clientId, Message $message) {
     }
 
-    public function onClose(int $clientId, int $code, string $reason) {
-        // nothing to do
-    }
-
-    public function onStop() {
-        // nothing to do
+    public function onClose(int $clientId, int $code, string $reason){
     }
 }

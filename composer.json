@@ -38,6 +38,7 @@
     },
     "require-dev": {
         "amphp/http-server": "^1",
+        "amphp/websocket-server": "^1",
         "amphp/phpunit-util": "^1",
         "friendsofphp/php-cs-fixer": "^2.9",
         "phpunit/phpunit": "^6"
