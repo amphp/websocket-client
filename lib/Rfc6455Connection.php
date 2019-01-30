@@ -436,6 +436,8 @@ final class Rfc6455Connection implements Connection {
             'messages_sent' => $this->messagesSent,
             'connected_at' => $this->connectedAt,
             'closed_at' => $this->closedAt,
+            'close_code' => $this->closeCode,
+            'close_reason' => $this->closeReason,
             'last_read_at' => $this->lastReadAt,
             'last_sent_at' => $this->lastSentAt,
             'last_data_read_at' => $this->lastDataReadAt,
