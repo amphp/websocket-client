@@ -55,13 +55,20 @@ final class Handshake {
         // we use the new key for validation.
         $this->accept = \base64_encode(\random_bytes(self::ACCEPT_NONCE_LENGTH));
 
+        $host = $this->uri->getHost();
+        $defaultPort = $this->isEncrypted() ? 443 : 80;
+        $port = $this->uri->getPort();
+        if ($port !== null && $port !== $defaultPort) {
+            $host .= ':' . $port;
+        }
+
         $headers = [];
 
         $headers['connection'][] = 'Upgrade';
         $headers['upgrade'][] = 'websocket';
         $headers['sec-websocket-version'][] = '13';
         $headers['sec-websocket-key'][] = $this->accept;
-        $headers['host'][] = $this->uri->getHost();
+        $headers['host'][] = $host;
 
         $headers = \array_merge($headers, $this->headers);
 
