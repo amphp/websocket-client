@@ -84,9 +84,11 @@ final class Rfc6455Connector implements Connector
 
         $headers = Rfc7230::formatHeaders($headers);
 
-        $path = $uri->getPath() ?? '/';
+        if (($path = $uri->getPath()) === '') {
+            $path = '/';
+        }
 
-        if ($query = $uri->getQuery()) {
+        if (($query = $uri->getQuery()) !== '') {
             $path .= '?' . $query;
         }
 
