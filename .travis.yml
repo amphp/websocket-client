@@ -6,9 +6,9 @@ services:
   - docker
 
 php:
-  - 7.0
   - 7.1
   - 7.2
+  - 7.3
   - nightly
 
 matrix:
@@ -46,4 +46,5 @@ after_script:
 
 cache:
   directories:
-    - $HOME/.composer/cache/files
+    - $HOME/.composer/cache
+    - $HOME/.php-cs-fixer
