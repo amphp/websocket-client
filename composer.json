@@ -34,7 +34,7 @@
         "amphp/http": "^1",
         "amphp/byte-stream": "^1",
         "amphp/socket": "^0.10",
-        "league/uri-parser": "^1.4"
+        "league/uri-schemes": "^1.2"
     },
     "require-dev": {
         "amphp/http-server": "^1",
@@ -58,7 +58,7 @@
     },
     "config": {
         "platform": {
-            "php": "7.0.0"
+            "php": "7.0.13"
         }
     }
 }
