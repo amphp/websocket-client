@@ -74,9 +74,11 @@ final class Handshake {
 
         $headers = Rfc7230::formatHeaders($headers);
 
-        $path = $this->uri->getPath() ?? '/';
+        if (($path = $this->uri->getPath()) === '') {
+            $path = '/';
+        }
 
-        if ($query = $this->uri->getQuery()) {
+        if (($query = $this->uri->getQuery()) !== '') {
             $path .= '?' . $query;
         }
 
