@@ -1,22 +1,22 @@
-# websocket
+# websocket-client
 
-[![Build Status](https://img.shields.io/travis/amphp/websocket/master.svg?style=flat-square)](https://travis-ci.org/amphp/websocket)
-[![CoverageStatus](https://img.shields.io/coveralls/amphp/websocket/master.svg?style=flat-square)](https://coveralls.io/github/amphp/websocket?branch=master)
+[![Build Status](https://img.shields.io/travis/amphp/websocket-client/master.svg?style=flat-square)](https://travis-ci.org/amphp/websocket-client)
+[![CoverageStatus](https://img.shields.io/coveralls/amphp/websocket-client/master.svg?style=flat-square)](https://coveralls.io/github/amphp/websocket-client?branch=master)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
 
-`amphp/websocket` is an async WebSocket client for PHP based on Amp.
+`amphp/websocket-client` is an async WebSocket client for PHP based on Amp.
 
 ## Installation
 
 This package can be installed as a [Composer](https://getcomposer.org/) dependency.
 
 ```
-composer require amphp/websocket
+composer require amphp/websocket-client
 ```
 
 ## Requirements
 
-* PHP 7.0+
+* PHP 7.1+
 
 ## Documentation & Examples
 
@@ -24,17 +24,20 @@ More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
 use Amp\Delayed;
-use Amp\Websocket;
+use Amp\Websocket\Client\Connection;
+use Amp\Websocket\Message;
+use function Amp\Websocket\Client\connect;
 
-// Connects to the websocket endpoint in demo.php provided with Aerys (https://github.com/amphp/aerys).
+// Connects to the Kaazing echoing websocket demo.
 Amp\Loop::run(function () {
-    /** @var \Amp\Websocket\Connection $connection */
-    $connection = yield Websocket\connect("ws://localhost:1337/ws");
+    /** @var Connection $connection */
+    $connection = yield connect('ws://demos.kaazing.com/echo');
     yield $connection->send("Hello!");
 
     $i = 0;
 
     while ($message = yield $connection->receive()) {
+        /** @var Message $message */
         $payload = yield $message->buffer();
         printf("Received: %s\n", $payload);
 
@@ -56,7 +59,7 @@ Amp\Loop::run(function () {
 
 ## Versioning
 
-`amphp/websocket` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
+`amphp/websocket-client` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
 
 ## Security
 
