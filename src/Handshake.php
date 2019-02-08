@@ -5,7 +5,6 @@ namespace Amp\Websocket\Client;
 use Amp\Http\Message;
 use Amp\Websocket\Options;
 use League\Uri\UriException;
-use League\Uri\UriInterface as Uri;
 use League\Uri\Ws;
 
 final class Handshake extends Message
@@ -43,22 +42,17 @@ final class Handshake extends Message
         }
     }
 
-    public function getUri(): Uri
+    /**
+     * @return Ws Websocket URI (scheme will be either ws or wss).
+     */
+    public function getUri(): Ws
     {
         return $this->uri;
     }
 
-    public function getRemoteAddress(): string
-    {
-        $defaultPort = $this->isEncrypted() ? 443 : 80;
-        return $this->uri->getHost() . ':' . ($this->uri->getPort() ?? $defaultPort);
-    }
-
-    public function isEncrypted(): bool
-    {
-        return $this->uri->getScheme() === 'wss';
-    }
-
+    /**
+     * @return Options
+     */
     public function getOptions(): Options
     {
         return $this->options;

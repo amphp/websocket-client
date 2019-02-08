@@ -23,13 +23,15 @@ final class Rfc6455Connector implements Connector
     ): Promise {
         return call(function () use ($handshake, $connectContext, $tlsContext) {
             try {
-                if ($handshake->isEncrypted()) {
-                    /** @var ClientSocket $socket */
-                    $socket = yield Socket\cryptoConnect($handshake->getRemoteAddress(), $connectContext, $tlsContext);
+                $uri = $handshake->getUri();
+
+                if ($uri->getScheme() === 'wss') {
+                    $socket = yield Socket\cryptoConnect($uri->getAuthority(), $connectContext, $tlsContext);
                 } else {
-                    /** @var ClientSocket $socket */
-                    $socket = yield Socket\connect($handshake->getRemoteAddress(), $connectContext);
+                    $socket = yield Socket\connect($uri->getAuthority(), $connectContext);
                 }
+
+                \assert($socket instanceof ClientSocket);
 
                 $key = Websocket\generateKey();
                 yield $socket->write($this->generateRequest($handshake, $key));
