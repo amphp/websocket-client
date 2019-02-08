@@ -10,6 +10,7 @@ use Amp\Socket;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Message;
+use Amp\Websocket\Server\Options;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
 use function Amp\call;
@@ -162,7 +163,12 @@ class WebSocketTest extends TestCase
     public function testVeryLongMessage()
     {
         Promise\wait(call(function () {
-            $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
+            $options = (new Options)
+                ->withBytesPerSecondLimit(\PHP_INT_MAX)
+                ->withFramesPerSecondLimit(\PHP_INT_MAX)
+                ->withoutCompression();
+
+            $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
                 public function onConnection(Client $client, Request $request)
                 {
                     $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
@@ -171,7 +177,7 @@ class WebSocketTest extends TestCase
             });
 
             /** @var Client $client */
-            $client = yield connect('ws://localhost:' . $port . '/');
+            $client = yield connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
 
             /** @var Message $message */
             $message = yield $client->receive();
@@ -182,7 +188,12 @@ class WebSocketTest extends TestCase
     public function testTooLongMessage()
     {
         Promise\wait(call(function () {
-            $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
+            $options = (new Options)
+                ->withBytesPerSecondLimit(\PHP_INT_MAX)
+                ->withFramesPerSecondLimit(\PHP_INT_MAX)
+                ->withoutCompression();
+
+            $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
                 public function onConnection(Client $client, Request $request)
                 {
                     $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB
@@ -191,7 +202,7 @@ class WebSocketTest extends TestCase
             });
 
             /** @var Client $client */
-            $client = yield connect('ws://localhost:' . $port . '/');
+            $client = yield connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
 
             try {
                 /** @var Message $message */
