@@ -24,11 +24,13 @@ final class Rfc6455Connector implements Connector
         return call(function () use ($handshake, $connectContext, $tlsContext) {
             try {
                 $uri = $handshake->getUri();
+                $isEncrypted = $uri->getScheme() === 'wss';
+                $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $isEncrypted ? 443 : 80);
 
-                if ($uri->getScheme() === 'wss') {
-                    $socket = yield Socket\cryptoConnect($uri->getAuthority(), $connectContext, $tlsContext);
+                if ($isEncrypted) {
+                    $socket = yield Socket\cryptoConnect($authority, $connectContext, $tlsContext);
                 } else {
-                    $socket = yield Socket\connect($uri->getAuthority(), $connectContext);
+                    $socket = yield Socket\connect($authority, $connectContext);
                 }
 
                 \assert($socket instanceof ClientSocket);
