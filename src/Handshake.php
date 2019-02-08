@@ -2,12 +2,13 @@
 
 namespace Amp\Websocket\Client;
 
+use Amp\Http\Message;
 use Amp\Websocket\Options;
 use League\Uri\UriException;
 use League\Uri\UriInterface as Uri;
 use League\Uri\Ws;
 
-final class Handshake extends Internal\Message
+final class Handshake extends Message
 {
     /** @var Ws */
     private $uri;

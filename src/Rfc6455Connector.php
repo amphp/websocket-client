@@ -61,12 +61,6 @@ final class Rfc6455Connector implements Connector
     private function generateRequest(Handshake $handshake, string $key): string
     {
         $uri = $handshake->getUri();
-        $host = $uri->getHost();
-        $defaultPort = $handshake->isEncrypted() ? 443 : 80;
-        $port = $uri->getPort();
-        if ($port !== null && $port !== $defaultPort) {
-            $host .= ':' . $port;
-        }
 
         $headers = [];
 
@@ -74,7 +68,7 @@ final class Rfc6455Connector implements Connector
         $headers['upgrade'] = ['websocket'];
         $headers['sec-websocket-version'] = ['13'];
         $headers['sec-websocket-key'] = [$key];
-        $headers['host'] = [$host];
+        $headers['host'] = [$uri->getAuthority()];
 
         if ($handshake->getOptions()->isCompressionEnabled()) {
             $headers['sec-websocket-extensions'] = [Rfc7692Compression::createRequestHeader()];

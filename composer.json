@@ -31,15 +31,15 @@
     "require": {
         "php": ">=7.1",
         "amphp/amp": "^2",
-        "amphp/http": "^1",
+        "amphp/http": "dev-master as 1.0.1",
         "amphp/byte-stream": "^1",
         "amphp/socket": "^0.10",
-        "amphp/websocket": "dev-master",
+        "amphp/websocket": "dev-master as 1.0",
         "league/uri-schemes": "^1.2"
     },
     "require-dev": {
         "amphp/http-server": "^1",
-        "amphp/websocket-server": "dev-master",
+        "amphp/websocket-server": "dev-master as 2.0",
         "amphp/phpunit-util": "^1",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpunit/phpunit": "^6"
