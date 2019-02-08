@@ -25,7 +25,8 @@ final class Rfc6455Connector implements Connector
             try {
                 $uri = $handshake->getUri();
                 $isEncrypted = $uri->getScheme() === 'wss';
-                $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $isEncrypted ? 443 : 80);
+                $defaultPort = $isEncrypted ? 443 : 80;
+                $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $defaultPort);
 
                 if ($isEncrypted) {
                     $socket = yield Socket\cryptoConnect($authority, $connectContext, $tlsContext);
@@ -68,11 +69,11 @@ final class Rfc6455Connector implements Connector
 
         $headers = [];
 
+        $headers['host'] = [$uri->getAuthority()];
         $headers['connection'] = ['Upgrade'];
         $headers['upgrade'] = ['websocket'];
         $headers['sec-websocket-version'] = ['13'];
         $headers['sec-websocket-key'] = [$key];
-        $headers['host'] = [$uri->getAuthority()];
 
         if ($handshake->getOptions()->isCompressionEnabled()) {
             $headers['sec-websocket-extensions'] = [Rfc7692Compression::createRequestHeader()];
@@ -102,14 +103,15 @@ final class Rfc6455Connector implements Connector
         $position = \strpos($headerBuffer, "\r\n");
         $startLine = \substr($headerBuffer, 0, $position);
 
-        if (!\preg_match("(^HTTP/1.1 (\d{3}) ([^\x01-\x08\x10-\x19]*)$)", $startLine, $matches)) {
+        if (!\preg_match("/^HTTP\/(1\.[01]) (\d{3}) ([^\x01-\x08\x10-\x19]*)$/i", $startLine, $matches)) {
             throw new ConnectionException('Invalid response start line: ' . $startLine);
         }
 
-        $status = (int) $matches[1];
-        $reason = $matches[2];
+        $version = $matches[1];
+        $status = (int) $matches[2];
+        $reason = $matches[3];
 
-        if ($status !== Status::SWITCHING_PROTOCOLS) {
+        if ($version !== '1.1' || $status !== Status::SWITCHING_PROTOCOLS) {
             throw new ConnectionException(
                 \sprintf('Did not receive switching protocols response: %d %s', $status, $reason),
                 $status
