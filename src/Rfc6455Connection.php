@@ -62,9 +62,34 @@ final class Rfc6455Connection implements Connection
         return $this->client->getLocalAddress();
     }
 
+    public function getLocalPort(): ?int
+    {
+        return $this->client->getLocalPort();
+    }
+
     public function getRemoteAddress(): string
     {
         return $this->client->getRemoteAddress();
+    }
+
+    public function getRemotePort(): ?int
+    {
+        return $this->client->getRemotePort();
+    }
+
+    public function isEncrypted(): bool
+    {
+        return $this->client->isEncrypted();
+    }
+
+    public function getCryptoContext(): array
+    {
+        return $this->client->getCryptoContext();
+    }
+
+    public function didPeerInitiateClose(): bool
+    {
+        return $this->client->didPeerInitiateClose();
     }
 
     public function getUnansweredPingCount(): int
