@@ -26,17 +26,7 @@ final class Handshake extends Message
      */
     public function __construct($uri, ?Options $options = null, array $headers = [])
     {
-        if (\is_string($uri)) {
-            try {
-                $uri = Ws::createFromString($uri);
-            } catch (UriException $exception) {
-                throw new \Error('Invalid Websocket URI provided', 0, $exception);
-            }
-        } elseif (!$uri instanceof Ws) {
-            throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Ws::class));
-        }
-
-        $this->uri = $uri;
+        $this->uri = $this->makeUri($uri);
         $this->options = $options ?? new Options;
 
         if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
@@ -57,6 +47,34 @@ final class Handshake extends Message
     }
 
     /**
+     * @param $uri string|Ws
+     *
+     * @return self Cloned object
+     */
+    public function withUri($uri): self
+    {
+        $clone = clone $this;
+        $clone->uri = $clone->makeUri($uri);
+
+        return $clone;
+    }
+
+    private function makeUri($uri): Ws
+    {
+        if (\is_string($uri)) {
+            try {
+                return Ws::createFromString($uri);
+            } catch (UriException $exception) {
+                throw new \Error('Invalid Websocket URI provided', 0, $exception);
+            }
+        } elseif (!$uri instanceof Ws) {
+            throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Ws::class));
+        }
+
+        return $uri;
+    }
+
+    /**
      * @return Options
      */
     public function getOptions(): Options
@@ -64,6 +82,26 @@ final class Handshake extends Message
         return $this->options;
     }
 
+    /**
+     * @param Options $options
+     *
+     * @return self Cloned object.
+     */
+    public function withOptions(Options $options): self
+    {
+        $clone = clone $this;
+        $clone->options = $options;
+
+        return $clone;
+    }
+
+    /**
+     * Replaces all headers in the returned instance.
+     *
+     * @param string[]|string[][] $headers
+     *
+     * @return self Cloned object.
+     */
     public function withHeaders(array $headers): self
     {
         $clone = clone $this;
@@ -72,6 +110,14 @@ final class Handshake extends Message
         return $clone;
     }
 
+    /**
+     * Replaces the given header in the returned instance.
+     *
+     * @param string          $name
+     * @param string|string[] $value
+     *
+     * @return self Cloned object.
+     */
     public function withHeader(string $name, $value): self
     {
         $clone = clone $this;
@@ -80,6 +126,14 @@ final class Handshake extends Message
         return $clone;
     }
 
+    /**
+     * Adds the given header in the returned instance.
+     *
+     * @param string          $name
+     * @param string|string[] $value
+     *
+     * @return self Cloned object.
+     */
     public function withAddedHeader(string $name, $value): self
     {
         $clone = clone $this;
@@ -88,6 +142,13 @@ final class Handshake extends Message
         return $clone;
     }
 
+    /**
+     * Removes the given header in the returned instance.
+     *
+     * @param string $name
+     *
+     * @return self Cloned object.
+     */
     public function withoutHeader(string $name): self
     {
         $clone = clone $this;
