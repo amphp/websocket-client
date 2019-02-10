@@ -9,7 +9,7 @@ use function Amp\Websocket\Client\connect;
 
 Amp\Loop::run(function () {
     /** @var Connection $connection */
-    $connection = yield connect('ws://demos.kaazing.com/echo');
+    $connection = yield connect('wss://demos.kaazing.com/echo');
     yield $connection->send('Hello!');
 
     $i = 0;

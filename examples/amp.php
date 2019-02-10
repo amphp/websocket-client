@@ -11,8 +11,8 @@ use function Amp\Websocket\Client\connect;
 // Connects to the websocket endpoint in examples/broadcast-server/server.php provided in
 // amphp/websocket-server (https://github.com/amphp/websocket-server).
 Amp\Loop::run(function () {
-    $handshake = new Handshake('ws://localhost:1337/broadcast');
-    $handshake->setHeader('Origin', 'http://localhost:1337');
+    $handshake = (new Handshake('ws://localhost:1337/broadcast'))
+        ->withHeader('Origin', 'http://localhost:1337');
 
     /** @var Connection $connection */
     $connection = yield connect($handshake);
