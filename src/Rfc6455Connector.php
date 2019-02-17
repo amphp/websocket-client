@@ -15,7 +15,7 @@ use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\Rfc7692CompressionFactory;
 use function Amp\call;
 
-final class Rfc6455Connector implements Connector
+class Rfc6455Connector implements Connector
 {
     /** @var CompressionContextFactory */
     private $compressionFactory;
@@ -62,7 +62,9 @@ final class Rfc6455Connector implements Connector
 
                         $headers = $this->handleResponse($headerBuffer, $key);
 
-                        return $this->createConnection($handshake, $socket, $headers, $buffer);
+                        $socket = new Internal\ClientSocket($socket->getResource(), $buffer);
+
+                        return $this->createConnection($socket, $handshake->getOptions(), $headers);
                     }
                 }
             } catch (ConnectionException $exception) {
@@ -148,24 +150,28 @@ final class Rfc6455Connector implements Connector
         return $headers;
     }
 
-    private function createConnection(Handshake $handshake, ClientSocket $socket, array $headers, string $buffer): Connection
+    final protected function createCompressionContext(array $headers): ?Websocket\CompressionContext
     {
-        $options = $handshake->getOptions();
+        $extensions = $headers['sec-websocket-extensions'][0] ?? '';
 
-        $compressionContext = null;
-        if ($options->isCompressionEnabled()) {
-            $extensions = $headers['sec-websocket-extensions'][0] ?? '';
+        $extensions = \array_map('trim', \explode(',', $extensions));
 
-            $extensions = \array_map('trim', \explode(',', $extensions));
-
-            foreach ($extensions as $extension) {
-                if ($compressionContext = $this->compressionFactory->fromServerHeader($extension)) {
-                    break;
-                }
+        foreach ($extensions as $extension) {
+            if ($compressionContext = $this->compressionFactory->fromServerHeader($extension)) {
+                return $compressionContext;
             }
         }
 
-        $client = new Rfc6455Client($socket, $options, true, $compressionContext, $buffer);
+        return null;
+    }
+
+    protected function createConnection(ClientSocket $socket, Websocket\Options $options, array $headers): Connection
+    {
+        if ($options->isCompressionEnabled()) {
+            $compressionContext = $this->createCompressionContext($headers);
+        }
+
+        $client = new Rfc6455Client($socket, $options, true, $compressionContext ?? null);
         return new Rfc6455Connection($client, $headers);
     }
 }
