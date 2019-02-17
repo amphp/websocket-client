@@ -10,12 +10,24 @@ use Amp\Socket\ClientConnectContext;
 use Amp\Socket\ClientSocket;
 use Amp\Socket\ClientTlsContext;
 use Amp\Websocket;
+use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
-use Amp\Websocket\Rfc7692Compression;
+use Amp\Websocket\Rfc7692CompressionFactory;
 use function Amp\call;
 
 final class Rfc6455Connector implements Connector
 {
+    /** @var CompressionContextFactory */
+    private $compressionFactory;
+
+    /**
+     * @param CompressionContextFactory|null $compressionFactory Automatically uses Rfc7692CompressionFactory if null.
+     */
+    public function __construct(?CompressionContextFactory $compressionFactory = null)
+    {
+        $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
+    }
+
     public function connect(
         Handshake $handshake,
         ?ClientConnectContext $connectContext = null,
@@ -67,7 +79,7 @@ final class Rfc6455Connector implements Connector
     {
         $uri = $handshake->getUri();
 
-        $headers = [];
+        $headers = $handshake->getHeaders();
 
         $headers['host'] = [$uri->getAuthority()];
         $headers['connection'] = ['Upgrade'];
@@ -76,12 +88,8 @@ final class Rfc6455Connector implements Connector
         $headers['sec-websocket-key'] = [$key];
 
         if ($handshake->getOptions()->isCompressionEnabled()) {
-            $headers['sec-websocket-extensions'] = [Rfc7692Compression::createRequestHeader()];
+            $headers['sec-websocket-extensions'] = [$this->compressionFactory->createRequestHeader()];
         }
-
-        $headers = \array_merge($headers, $handshake->getHeaders());
-
-        $headers = Rfc7230::formatHeaders($headers);
 
         if (($path = $uri->getPath()) === '') {
             $path = '/';
@@ -91,7 +99,7 @@ final class Rfc6455Connector implements Connector
             $path .= '?' . $query;
         }
 
-        return \sprintf("GET %s HTTP/1.1\r\n%s\r\n", $path, $headers);
+        return \sprintf("GET %s HTTP/1.1\r\n%s\r\n", $path, Rfc7230::formatHeaders($headers));
     }
 
     private function handleResponse(string $headerBuffer, string $key): array
@@ -151,7 +159,7 @@ final class Rfc6455Connector implements Connector
             $extensions = \array_map('trim', \explode(',', $extensions));
 
             foreach ($extensions as $extension) {
-                if ($compressionContext = Rfc7692Compression::fromServerHeader($extension)) {
+                if ($compressionContext = $this->compressionFactory->fromServerHeader($extension)) {
                     break;
                 }
             }
