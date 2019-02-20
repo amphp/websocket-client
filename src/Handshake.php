@@ -21,13 +21,13 @@ final class Handshake extends Message
      * @param Options|null        $options
      * @param string[]|string[][] $headers
      *
-     * @throws \TypeError If $uri is not a string or and instance of \League\Uri\Ws.
+     * @throws \TypeError If $uri is not a string or an instance of \League\Uri\Ws.
      * @throws \Error If compression is enabled in the options but the zlib extension is not installed.
      */
     public function __construct($uri, ?Options $options = null, array $headers = [])
     {
         $this->uri = $this->makeUri($uri);
-        $this->options = $options ?? new Options;
+        $this->setOptions($options);
 
         if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
             throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
@@ -67,7 +67,9 @@ final class Handshake extends Message
             } catch (UriException $exception) {
                 throw new \Error('Invalid Websocket URI provided', 0, $exception);
             }
-        } elseif (!$uri instanceof Ws) {
+        }
+
+        if (!$uri instanceof Ws) {
             throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Ws::class));
         }
 
@@ -90,9 +92,18 @@ final class Handshake extends Message
     public function withOptions(Options $options): self
     {
         $clone = clone $this;
-        $clone->options = $options;
+        $clone->setOptions($options);
 
         return $clone;
+    }
+
+    private function setOptions(?Options $options): void
+    {
+        $this->options = $options ?? new Options;
+
+        if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
+            throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
+        }
     }
 
     /**
