@@ -5,7 +5,9 @@ namespace Amp\Websocket\Client;
 use Amp\ByteStream\InputStream;
 use Amp\Http\Message;
 use Amp\Promise;
+use Amp\Websocket\ClientMetadata;
 use Amp\Websocket\Code;
+use Amp\Websocket\Options;
 use Amp\Websocket\Rfc6455Client;
 
 final class Rfc6455Connection implements Connection
@@ -50,6 +52,11 @@ final class Rfc6455Connection implements Connection
     public function getId(): int
     {
         return $this->client->getId();
+    }
+
+    public function getOptions(): Options
+    {
+        return $this->client->getOptions();
     }
 
     public function isConnected(): bool
@@ -132,7 +139,7 @@ final class Rfc6455Connection implements Connection
         return $this->client->ping();
     }
 
-    public function getInfo(): array
+    public function getInfo(): ClientMetadata
     {
         return $this->client->getInfo();
     }
@@ -140,5 +147,10 @@ final class Rfc6455Connection implements Connection
     public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): Promise
     {
         return $this->client->close($code, $reason);
+    }
+
+    public function onClose(callable $onClose): void
+    {
+        $this->client->onClose($onClose);
     }
 }
