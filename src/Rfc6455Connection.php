@@ -44,6 +44,11 @@ final class Rfc6455Connection implements Connection
         return $this->headers->getHeader($name);
     }
 
+    public function hasHeader(string $name): bool
+    {
+        return $this->headers->hasHeader($name);
+    }
+
     public function receive(): Promise
     {
         return $this->client->receive();

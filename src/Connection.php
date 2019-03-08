@@ -33,4 +33,13 @@ interface Connection extends Client
      * @return string|null
      */
     public function getHeader(string $name): ?string;
+
+    /**
+     * Checks if given header exists.
+     *
+     * @param string $name
+     *
+     * @return bool
+     */
+    public function hasHeader(string $name): bool;
 }
