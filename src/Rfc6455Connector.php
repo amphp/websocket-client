@@ -2,8 +2,12 @@
 
 namespace Amp\Websocket\Client;
 
+use Amp\CancellationToken;
+use Amp\CancelledException;
+use Amp\Deferred;
 use Amp\Http\Rfc7230;
 use Amp\Http\Status;
+use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
 use Amp\Socket\ClientConnectContext;
@@ -13,6 +17,7 @@ use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\Rfc7692CompressionFactory;
+use function Amp\asyncCall;
 use function Amp\call;
 
 class Rfc6455Connector implements Connector
@@ -31,9 +36,12 @@ class Rfc6455Connector implements Connector
     public function connect(
         Handshake $handshake,
         ?ClientConnectContext $connectContext = null,
-        ?ClientTlsContext $tlsContext = null
+        ?ClientTlsContext $tlsContext = null,
+        ?CancellationToken $cancellationToken = null
     ): Promise {
-        return call(function () use ($handshake, $connectContext, $tlsContext) {
+        $cancellationToken = $cancellationToken ?? new NullCancellationToken;
+
+        return call(function () use ($handshake, $connectContext, $tlsContext, $cancellationToken) {
             try {
                 $uri = $handshake->getUri();
                 $isEncrypted = $uri->getScheme() === 'wss';
@@ -41,39 +49,60 @@ class Rfc6455Connector implements Connector
                 $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $defaultPort);
 
                 if ($isEncrypted) {
-                    $socket = yield Socket\cryptoConnect($authority, $connectContext, $tlsContext);
+                    $socket = yield Socket\cryptoConnect($authority, $connectContext, $tlsContext, $cancellationToken);
                 } else {
-                    $socket = yield Socket\connect($authority, $connectContext);
+                    $socket = yield Socket\connect($authority, $connectContext, $cancellationToken);
                 }
-
-                \assert($socket instanceof ClientSocket);
-
-                $key = Websocket\generateKey();
-                yield $socket->write($this->generateRequest($handshake, $key));
-
-                $buffer = '';
-
-                while (($chunk = yield $socket->read()) !== null) {
-                    $buffer .= $chunk;
-
-                    if ($position = \strpos($buffer, "\r\n\r\n")) {
-                        $headerBuffer = \substr($buffer, 0, $position + 4);
-                        $buffer = \substr($buffer, $position + 4);
-
-                        $headers = $this->handleResponse($headerBuffer, $key);
-
-                        $socket = new Internal\ClientSocket($socket->getResource(), $buffer);
-
-                        return $this->createConnection($socket, $handshake->getOptions(), $headers);
-                    }
-                }
-            } catch (ConnectionException $exception) {
+            } catch (CancelledException $exception) {
                 throw $exception;
             } catch (\Throwable $exception) {
-                throw new ConnectionException('Websocket connection attempt failed', 0, $exception);
+                throw new ConnectionException('Connecting to the websocket failed', 0, $exception);
             }
 
-            throw new ConnectionException('Connection closed unexpectedly');
+            \assert($socket instanceof ClientSocket);
+
+            $deferred = new Deferred;
+            $id = $cancellationToken->subscribe([$deferred, 'fail']);
+
+            asyncCall(function () use ($socket, $handshake, $deferred) {
+                try {
+                    $key = Websocket\generateKey();
+                    yield $socket->write($this->generateRequest($handshake, $key));
+
+                    $buffer = '';
+
+                    while (($chunk = yield $socket->read()) !== null) {
+                        $buffer .= $chunk;
+
+                        if ($position = \strpos($buffer, "\r\n\r\n")) {
+                            $headerBuffer = \substr($buffer, 0, $position + 4);
+                            $buffer = \substr($buffer, $position + 4);
+
+                            $headers = $this->handleResponse($headerBuffer, $key);
+
+                            $socket = new Internal\ClientSocket($socket->getResource(), $buffer);
+
+                            $deferred->resolve($this->createConnection($socket, $handshake->getOptions(), $headers));
+                            return;
+                        }
+                    }
+                } catch (ConnectionException $exception) {
+                    $deferred->fail($exception);
+                } catch (\Throwable $exception) {
+                    $deferred->fail(new ConnectionException('Performing the websocket handshake failed', 0, $exception));
+                }
+            });
+
+            try {
+                $connection = yield $deferred->promise();
+            } catch (\Throwable $exception) {
+                $socket->close(); // Close socket in case operation did not fail but was cancelled.
+                throw $exception;
+            } finally {
+                $cancellationToken->unsubscribe($id);
+            }
+
+            return $connection;
         });
     }
 

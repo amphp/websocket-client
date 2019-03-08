@@ -99,7 +99,7 @@ final class Handshake extends Message
 
     private function setOptions(?Options $options): void
     {
-        $this->options = $options ?? new Options;
+        $this->options = $options ?? (new Options)->withCompression();
 
         if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
             throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
