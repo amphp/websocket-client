@@ -3,6 +3,7 @@
 namespace Amp\Websocket\Client\Test;
 
 use Amp\Http\Server\Request;
+use Amp\Http\Server\Response;
 use Amp\Http\Server\Server;
 use Amp\PHPUnit\TestCase;
 use Amp\Promise;
@@ -10,7 +11,7 @@ use Amp\Socket;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Message;
-use Amp\Websocket\Server\Options;
+use Amp\Websocket\Options;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
 use function Amp\call;
@@ -61,16 +62,18 @@ class WebSocketTest extends TestCase
     {
         Promise\wait(call(function () {
             $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnection(Client $client, Request $request)
+                public function onConnect(Client $client, Request $request, Response $response): Promise
                 {
-                    while ($message = yield $client->receive()) {
-                        \assert($message instanceof Message);
-                        if ($message->isBinary()) {
-                            yield $client->sendBinary(yield $message->buffer());
-                        }
+                    return call(function () use ($client) {
+                        while ($message = yield $client->receive()) {
+                            \assert($message instanceof Message);
+                            if ($message->isBinary()) {
+                                yield $client->sendBinary(yield $message->buffer());
+                            }
 
-                        yield $client->send(yield $message->buffer());
-                    }
+                            yield $client->send(yield $message->buffer());
+                        }
+                    });
                 }
             });
 
@@ -96,16 +99,18 @@ class WebSocketTest extends TestCase
     {
         Promise\wait(call(function () {
             $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnection(Client $client, Request $request)
+                public function onConnect(Client $client, Request $request, Response $response): Promise
                 {
-                    while ($message = yield $client->receive()) {
-                        \assert($message instanceof Message);
-                        if ($message->isBinary()) {
-                            yield $client->sendBinary(yield $message->buffer());
-                        }
+                    return call(function () use ($client) {
+                        while ($message = yield $client->receive()) {
+                            \assert($message instanceof Message);
+                            if ($message->isBinary()) {
+                                yield $client->sendBinary(yield $message->buffer());
+                            }
 
-                        yield $client->send(yield $message->buffer());
-                    }
+                            yield $client->send(yield $message->buffer());
+                        }
+                    });
                 }
             });
 
@@ -131,10 +136,12 @@ class WebSocketTest extends TestCase
     {
         Promise\wait(call(function () {
             $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnection(Client $client, Request $request)
+                public function onConnect(Client $client, Request $request, Response $response): Promise
                 {
-                    yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
-                    yield $client->send('Message');
+                    return call(function () use ($client) {
+                        yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
+                        yield $client->send('Message');
+                    });
                 }
             });
 
@@ -169,10 +176,10 @@ class WebSocketTest extends TestCase
                 ->withoutCompression();
 
             $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-                public function onConnection(Client $client, Request $request)
+                public function onConnect(Client $client, Request $request, Response $response): Promise
                 {
                     $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
-                    yield $client->sendBinary($payload);
+                    return $client->sendBinary($payload);
                 }
             });
 
@@ -194,10 +201,10 @@ class WebSocketTest extends TestCase
                 ->withoutCompression();
 
             $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-                public function onConnection(Client $client, Request $request)
+                public function onConnect(Client $client, Request $request, Response $response): Promise
                 {
-                    $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB
-                    yield $client->sendBinary($payload);
+                    $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
+                    return $client->sendBinary($payload);
                 }
             });
 
