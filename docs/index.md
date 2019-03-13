@@ -2,11 +2,19 @@
 title: Introduction
 permalink: /
 ---
-`amphp/websocket` provides an asynchronous WebSocket client for PHP based on Amp.
+`amphp/websocket-client` provides an asynchronous WebSocket client for PHP based on Amp.
 WebSockets are full-duplex communication channels, which are mostly used for realtime communication where the HTTP request / response cycle has too much overhead.
 They're also used if the server should be able to push data to the client without an explicit request.
 
 There are various use cases for a WebSocket client in PHP, such as consuming realtime APIs, writing tests for a WebSocket server, or controlling web browsers via their remote debugging APIs, which are based on WebSockets.
+
+## Installation
+
+The server can be installed as a [Composer](https://getcomposer.org/) dependency.
+
+```bash
+composer require amphp/websocket-client
+```
 
 ## Connecting
 
