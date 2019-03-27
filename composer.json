@@ -31,8 +31,7 @@
     "require": {
         "php": ">=7.1",
         "amphp/amp": "^2",
-        "amphp/http": "dev-master as 1.1",
-        "amphp/byte-stream": "^1",
+        "amphp/http": "^1.1",
         "amphp/socket": "^0.10",
         "amphp/websocket": "dev-master as 1.0",
         "league/uri-schemes": "^1.2"
