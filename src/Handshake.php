@@ -27,11 +27,7 @@ final class Handshake extends Message
     public function __construct($uri, ?Options $options = null, array $headers = [])
     {
         $this->uri = $this->makeUri($uri);
-        $this->setOptions($options);
-
-        if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
-            throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
-        }
+        $this->options = $this->checkOptions($options);
 
         if (!empty($headers)) {
             $this->setHeaders($headers);
@@ -92,18 +88,32 @@ final class Handshake extends Message
     public function withOptions(Options $options): self
     {
         $clone = clone $this;
-        $clone->setOptions($options);
+        $clone->options = $clone->checkOptions($options);
 
         return $clone;
     }
 
-    private function setOptions(?Options $options): void
+    private function checkOptions(?Options $options): Options
     {
-        $this->options = $options ?? (new Options)->withCompression();
+        if ($options === null) {
+            $options = (new Options)
+                ->withBytesPerSecondLimit(\PHP_INT_MAX)
+                ->withFramesPerSecondLimit(\PHP_INT_MAX)
+                ->withMessageSizeLimit(2 ** 30) // 1 GB max message size
+                ->withFrameSizeLimit(2 ** 20 * 100); // 100 MB max frame size
 
-        if ($this->options->isCompressionEnabled() && !\extension_loaded('zlib')) {
+            if (\extension_loaded('zlib')) {
+                $options = $options->withCompression();
+            }
+
+            return $options;
+        }
+
+        if ($options->isCompressionEnabled() && !\extension_loaded('zlib')) {
             throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
         }
+
+        return $options;
     }
 
     /**
