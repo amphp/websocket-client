@@ -170,9 +170,10 @@ class WebSocketTest extends TestCase
     public function testVeryLongMessage()
     {
         Promise\wait(call(function () {
-            $options = (new Options)
+            $options = Options::createClientDefault()
                 ->withBytesPerSecondLimit(\PHP_INT_MAX)
                 ->withFramesPerSecondLimit(\PHP_INT_MAX)
+                ->withMessageSizeLimit(1024 * 1024 * 10)
                 ->withoutCompression();
 
             $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
@@ -195,9 +196,10 @@ class WebSocketTest extends TestCase
     public function testTooLongMessage()
     {
         Promise\wait(call(function () {
-            $options = (new Options)
+            $options = Options::createClientDefault()
                 ->withBytesPerSecondLimit(\PHP_INT_MAX)
                 ->withFramesPerSecondLimit(\PHP_INT_MAX)
+                ->withMessageSizeLimit(1024 * 1024 * 10)
                 ->withoutCompression();
 
             $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {

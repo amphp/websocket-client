@@ -16,7 +16,7 @@ const AGENT = 'amphp/websocket';
 Loop::run(function () {
     $errors = 0;
 
-    $options = (new Options)
+    $options = Options::createClientDefault()
         ->withBytesPerSecondLimit(\PHP_INT_MAX)
         ->withFrameSizeLimit(\PHP_INT_MAX)
         ->withFramesPerSecondLimit(\PHP_INT_MAX)

@@ -96,17 +96,7 @@ final class Handshake extends Message
     private function checkOptions(?Options $options): Options
     {
         if ($options === null) {
-            $options = (new Options)
-                ->withBytesPerSecondLimit(\PHP_INT_MAX)
-                ->withFramesPerSecondLimit(\PHP_INT_MAX)
-                ->withMessageSizeLimit(2 ** 30) // 1 GB max message size
-                ->withFrameSizeLimit(2 ** 20 * 100); // 100 MB max frame size
-
-            if (\extension_loaded('zlib')) {
-                $options = $options->withCompression();
-            }
-
-            return $options;
+            return Options::createClientDefault();
         }
 
         if ($options->isCompressionEnabled() && !\extension_loaded('zlib')) {
