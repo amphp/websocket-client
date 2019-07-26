@@ -10,9 +10,7 @@ use Amp\Http\Status;
 use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
-use Amp\Socket\ClientConnectContext;
-use Amp\Socket\ClientSocket;
-use Amp\Socket\ClientTlsContext;
+use Amp\Socket\ConnectContext;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
@@ -25,41 +23,45 @@ class Rfc6455Connector implements Connector
     /** @var CompressionContextFactory */
     private $compressionFactory;
 
+    /** @var Socket\Connector */
+    private $connector;
+
     /**
      * @param CompressionContextFactory|null $compressionFactory Automatically uses Rfc7692CompressionFactory if null.
+     * @param Socket\Connector|null $connector Socket connector. Global connector used if null.
      */
-    public function __construct(?CompressionContextFactory $compressionFactory = null)
+    public function __construct(?CompressionContextFactory $compressionFactory = null, ?Socket\Connector $connector = null)
     {
         $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
+        $this->connector = $connector ?? Socket\connector();
     }
 
     public function connect(
         Handshake $handshake,
-        ?ClientConnectContext $connectContext = null,
-        ?ClientTlsContext $tlsContext = null,
+        ?ConnectContext $connectContext = null,
         ?CancellationToken $cancellationToken = null
     ): Promise {
         $cancellationToken = $cancellationToken ?? new NullCancellationToken;
 
-        return call(function () use ($handshake, $connectContext, $tlsContext, $cancellationToken) {
+        return call(function () use ($handshake, $connectContext, $cancellationToken) {
             try {
                 $uri = $handshake->getUri();
                 $isEncrypted = $uri->getScheme() === 'wss';
                 $defaultPort = $isEncrypted ? 443 : 80;
                 $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $defaultPort);
 
+                $socket = yield $this->connector->connect($authority, $connectContext, $cancellationToken);
+
+                \assert($socket instanceof Socket\EncryptableSocket);
+
                 if ($isEncrypted) {
-                    $socket = yield Socket\cryptoConnect($authority, $connectContext, $tlsContext, $cancellationToken);
-                } else {
-                    $socket = yield Socket\connect($authority, $connectContext, $cancellationToken);
+                    yield $socket->setupTls();
                 }
             } catch (CancelledException $exception) {
                 throw $exception;
             } catch (\Throwable $exception) {
                 throw new ConnectionException('Connecting to the websocket failed', 0, $exception);
             }
-
-            \assert($socket instanceof ClientSocket);
 
             $deferred = new Deferred;
             $id = $cancellationToken->subscribe([$deferred, 'fail']);
@@ -80,7 +82,9 @@ class Rfc6455Connector implements Connector
 
                             $headers = $this->handleResponse($headerBuffer, $key);
 
-                            $socket = new Internal\ClientSocket($socket->getResource(), $buffer);
+                            if ($buffer !== '') {
+                                $socket = new ClientSocket($socket, $buffer);
+                            }
 
                             $deferred->resolve($this->createConnection($socket, $handshake->getOptions(), $headers));
                             return;
@@ -94,15 +98,13 @@ class Rfc6455Connector implements Connector
             });
 
             try {
-                $connection = yield $deferred->promise();
+                return yield $deferred->promise();
             } catch (\Throwable $exception) {
                 $socket->close(); // Close socket in case operation did not fail but was cancelled.
                 throw $exception;
             } finally {
                 $cancellationToken->unsubscribe($id);
             }
-
-            return $connection;
         });
     }
 
@@ -194,7 +196,7 @@ class Rfc6455Connector implements Connector
         return null;
     }
 
-    protected function createConnection(ClientSocket $socket, Websocket\Options $options, array $headers): Connection
+    protected function createConnection(Socket\EncryptableSocket $socket, Websocket\Options $options, array $headers): Connection
     {
         if ($options->isCompressionEnabled()) {
             $compressionContext = $this->createCompressionContext($headers);

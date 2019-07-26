@@ -5,45 +5,41 @@ namespace Amp\Websocket\Client;
 use Amp\Http\Message;
 use Amp\Websocket\Options;
 use League\Uri\UriException;
-use League\Uri\Ws;
 
 final class Handshake extends Message
 {
-    /** @var Ws */
+    /** @var WebsocketUri */
     private $uri;
 
     /** @var Options */
     private $options;
 
     /**
-     * @param string|Ws           $uri target address of websocket (e.g. ws://foo.bar/bar or
-     *                                 wss://crypto.example/?secureConnection) or a \League\Uri\Ws instance.
+     * @param string|WebsocketUri $uri target address of websocket (e.g. ws://foo.bar/bar or a
+     *                                 wss://crypto.example/?secureConnection) or a WebsocketUri instance.
      * @param Options|null        $options
      * @param string[]|string[][] $headers
      *
-     * @throws \TypeError If $uri is not a string or an instance of \League\Uri\Ws.
+     * @throws \TypeError If $uri is not a string or an instance of WebsocketUri.
      * @throws \Error If compression is enabled in the options but the zlib extension is not installed.
      */
     public function __construct($uri, ?Options $options = null, array $headers = [])
     {
         $this->uri = $this->makeUri($uri);
         $this->options = $this->checkOptions($options);
-
-        if (!empty($headers)) {
-            $this->setHeaders($headers);
-        }
+        $this->setHeaders($headers);
     }
 
     /**
-     * @return Ws Websocket URI (scheme will be either ws or wss).
+     * @return WebsocketUri Websocket URI (scheme will be either ws or wss).
      */
-    public function getUri(): Ws
+    public function getUri(): WebsocketUri
     {
         return $this->uri;
     }
 
     /**
-     * @param $uri string|Ws
+     * @param $uri string|WebsocketUri
      *
      * @return self Cloned object
      */
@@ -55,18 +51,18 @@ final class Handshake extends Message
         return $clone;
     }
 
-    private function makeUri($uri): Ws
+    private function makeUri($uri): WebsocketUri
     {
         if (\is_string($uri)) {
             try {
-                return Ws::createFromString($uri);
+                $uri = WebsocketUri::createFromString($uri);
             } catch (UriException $exception) {
                 throw new \Error('Invalid Websocket URI provided', 0, $exception);
             }
         }
 
-        if (!$uri instanceof Ws) {
-            throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Ws::class));
+        if (!$uri instanceof WebsocketUri) {
+            throw new \TypeError(\sprintf('Must provide an instance of %s or a websocket URL as a string', WebsocketUri::class));
         }
 
         return $uri;

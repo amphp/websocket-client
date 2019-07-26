@@ -5,6 +5,8 @@ namespace Amp\Websocket\Client;
 use Amp\ByteStream\InputStream;
 use Amp\Http\Message;
 use Amp\Promise;
+use Amp\Socket\SocketAddress;
+use Amp\Socket\TlsInfo;
 use Amp\Websocket\ClientMetadata;
 use Amp\Websocket\Code;
 use Amp\Websocket\Options;
@@ -69,34 +71,19 @@ final class Rfc6455Connection implements Connection
         return $this->client->isConnected();
     }
 
-    public function getLocalAddress(): string
+    public function getLocalAddress(): SocketAddress
     {
         return $this->client->getLocalAddress();
     }
 
-    public function getLocalPort(): ?int
-    {
-        return $this->client->getLocalPort();
-    }
-
-    public function getRemoteAddress(): string
+    public function getRemoteAddress(): SocketAddress
     {
         return $this->client->getRemoteAddress();
     }
 
-    public function getRemotePort(): ?int
+    public function getTlsInfo(): ?TlsInfo
     {
-        return $this->client->getRemotePort();
-    }
-
-    public function isEncrypted(): bool
-    {
-        return $this->client->isEncrypted();
-    }
-
-    public function getCryptoContext(): array
-    {
-        return $this->client->getCryptoContext();
+        return $this->client->getTlsInfo();
     }
 
     public function didPeerInitiateClose(): bool

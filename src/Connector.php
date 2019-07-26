@@ -4,15 +4,13 @@ namespace Amp\Websocket\Client;
 
 use Amp\CancellationToken;
 use Amp\Promise;
-use Amp\Socket\ClientConnectContext;
-use Amp\Socket\ClientTlsContext;
+use Amp\Socket\ConnectContext;
 
 interface Connector
 {
     /**
      * @param Handshake $handshake
-     * @param ClientConnectContext|null $connectContext
-     * @param ClientTlsContext|null $tlsContext
+     * @param ConnectContext|null $connectContext
      * @param CancellationToken|null $cancellationToken
      *
      * @return Promise<Connection>
@@ -21,8 +19,7 @@ interface Connector
      */
     public function connect(
         Handshake $handshake,
-        ?ClientConnectContext $connectContext = null,
-        ?ClientTlsContext $tlsContext = null,
+        ?ConnectContext $connectContext = null,
         ?CancellationToken $cancellationToken = null
     ): Promise;
 }

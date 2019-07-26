@@ -7,7 +7,7 @@ use Amp\Http\Server\Response;
 use Amp\Http\Server\Server;
 use Amp\PHPUnit\TestCase;
 use Amp\Promise;
-use Amp\Socket;
+use Amp\Socket\Server as SocketServer;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Message;
@@ -45,7 +45,7 @@ class WebSocketTest extends TestCase
      */
     public function createServer(Websocket $websocket): Promise
     {
-        $socket = Socket\listen('tcp://127.0.0.1:0');
+        $socket = SocketServer::listen('tcp://127.0.0.1:0');
 
         $port = (int) \explode(':', $socket->getAddress())[1];
 

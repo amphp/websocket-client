@@ -5,8 +5,7 @@ namespace Amp\Websocket\Client;
 use Amp\CancellationToken;
 use Amp\Loop;
 use Amp\Promise;
-use Amp\Socket\ClientConnectContext;
-use Amp\Socket\ClientTlsContext;
+use Amp\Socket\ConnectContext;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
@@ -34,8 +33,7 @@ function connector(?Connector $connector = null): Connector
 
 /**
  * @param string|Handshake          $handshake
- * @param ClientConnectContext|null $connectContext
- * @param ClientTlsContext|null     $tlsContext
+ * @param ConnectContext|null $connectContext
  * @param CancellationToken|null    $cancellationToken
  *
  * @return Promise<Connection>
@@ -45,15 +43,14 @@ function connector(?Connector $connector = null): Connector
  */
 function connect(
     $handshake,
-    ?ClientConnectContext $connectContext = null,
-    ?ClientTlsContext $tlsContext = null,
+    ?ConnectContext $connectContext = null,
     ?CancellationToken $cancellationToken = null
 ): Promise {
     if (\is_string($handshake)) {
         $handshake = new Handshake($handshake);
     } elseif (!$handshake instanceof Handshake) {
-        throw new \TypeError(\sprintf('Must provide an instance of %s or a URL as a string', Handshake::class));
+        throw new \TypeError(\sprintf('Must provide an instance of %s or a websocket URL as a string', Handshake::class));
     }
 
-    return connector()->connect($handshake, $connectContext, $tlsContext, $cancellationToken);
+    return connector()->connect($handshake, $connectContext, $cancellationToken);
 }
