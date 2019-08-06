@@ -56,7 +56,7 @@ final class Rfc6455Connection implements Connection
         return $this->client->receive();
     }
 
-    public function getId(): string
+    public function getId(): int
     {
         return $this->client->getId();
     }
