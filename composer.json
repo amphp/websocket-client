@@ -39,9 +39,9 @@
     "require-dev": {
         "amphp/http-server": "v2.x-dev as 1.0",
         "amphp/websocket-server": "http-server-2.0-dev as 2.0",
-        "amphp/phpunit-util": "^1",
+        "amphp/phpunit-util": "^1.1",
         "amphp/php-cs-fixer-config": "dev-master",
-        "phpunit/phpunit": "^6"
+        "phpunit/phpunit": "^7"
     },
     "autoload": {
         "psr-4": {

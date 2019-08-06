@@ -5,7 +5,7 @@ namespace Amp\Websocket\Client\Test;
 use Amp\Http\Server\Request;
 use Amp\Http\Server\Response;
 use Amp\Http\Server\Server;
-use Amp\PHPUnit\TestCase;
+use Amp\PHPUnit\AsyncTestCase;
 use Amp\Promise;
 use Amp\Socket\Server as SocketServer;
 use Amp\Websocket\Client;
@@ -17,27 +17,10 @@ use Psr\Log\NullLogger;
 use function Amp\call;
 use function Amp\Websocket\Client\connect;
 
-class WebSocketTest extends TestCase
+class WebSocketTest extends AsyncTestCase
 {
-    /** @var Server[] */
-    private $servers = [];
-
-    protected function tearDown()
-    {
-        $promises = [];
-        foreach ($this->servers as $server) {
-            $promises[] = $server->stop();
-        }
-
-        Promise\wait(Promise\all($promises));
-
-        parent::tearDown();
-    }
-
     /**
      * This method creates a new server that listens on a randomly assigned port and returns the used port.
-     *
-     * The server will automatically shut down after a test case ends.
      *
      * @param Websocket $websocket
      *
@@ -47,36 +30,35 @@ class WebSocketTest extends TestCase
     {
         $socket = SocketServer::listen('tcp://127.0.0.1:0');
 
-        $port = (int) \explode(':', $socket->getAddress())[1];
+        $port = $socket->getAddress()->getPort();
 
         $server = new Server([$socket], $websocket, new NullLogger);
-        $this->servers[] = $server;
 
         return call(function () use ($server, $port) {
             yield $server->start();
-            return $port;
+            return [$server, $port];
         });
     }
 
-    public function testSimpleBinaryEcho()
+    public function testSimpleBinaryEcho(): \Generator
     {
-        Promise\wait(call(function () {
-            $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnect(Client $client, Request $request, Response $response): Promise
-                {
-                    return call(function () use ($client) {
-                        while ($message = yield $client->receive()) {
-                            \assert($message instanceof Message);
-                            if ($message->isBinary()) {
-                                yield $client->sendBinary(yield $message->buffer());
-                            }
-
-                            yield $client->send(yield $message->buffer());
+        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
+            public function onConnect(Client $client, Request $request, Response $response): Promise
+            {
+                return call(function () use ($client) {
+                    while ($message = yield $client->receive()) {
+                        \assert($message instanceof Message);
+                        if ($message->isBinary()) {
+                            yield $client->sendBinary(yield $message->buffer());
                         }
-                    });
-                }
-            });
 
+                        yield $client->send(yield $message->buffer());
+                    }
+                });
+            }
+        });
+
+        try {
             /** @var Client $client */
             $client = yield connect('ws://127.0.0.1:' . $port . '/');
             $client->sendBinary('Hey!');
@@ -92,28 +74,30 @@ class WebSocketTest extends TestCase
             $client->close();
 
             $this->assertNull(yield $promise);
-        }));
+        } finally {
+            $server->stop();
+        }
     }
 
-    public function testSimpleTextEcho()
+    public function testSimpleTextEcho(): \Generator
     {
-        Promise\wait(call(function () {
-            $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnect(Client $client, Request $request, Response $response): Promise
-                {
-                    return call(function () use ($client) {
-                        while ($message = yield $client->receive()) {
-                            \assert($message instanceof Message);
-                            if ($message->isBinary()) {
-                                yield $client->sendBinary(yield $message->buffer());
-                            }
-
-                            yield $client->send(yield $message->buffer());
+        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
+            public function onConnect(Client $client, Request $request, Response $response): Promise
+            {
+                return call(function () use ($client) {
+                    while ($message = yield $client->receive()) {
+                        \assert($message instanceof Message);
+                        if ($message->isBinary()) {
+                            yield $client->sendBinary(yield $message->buffer());
                         }
-                    });
-                }
-            });
 
+                        yield $client->send(yield $message->buffer());
+                    }
+                });
+            }
+        });
+
+        try {
             /** @var Client $client */
             $client = yield connect('ws://localhost:' . $port . '/');
             $client->send('Hey!');
@@ -129,22 +113,24 @@ class WebSocketTest extends TestCase
             $client->close();
 
             $this->assertNull(yield $promise);
-        }));
+        } finally {
+            $server->stop();
+        }
     }
 
-    public function testUnconsumedMessage()
+    public function testUnconsumedMessage(): \Generator
     {
-        Promise\wait(call(function () {
-            $port = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-                public function onConnect(Client $client, Request $request, Response $response): Promise
-                {
-                    return call(function () use ($client) {
-                        yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
-                        yield $client->send('Message');
-                    });
-                }
-            });
+        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
+            public function onConnect(Client $client, Request $request, Response $response): Promise
+            {
+                return call(function () use ($client) {
+                    yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
+                    yield $client->send('Message');
+                });
+            }
+        });
 
+        try {
             /** @var Client $client */
             $client = yield connect('ws://localhost:' . $port . '/');
 
@@ -164,62 +150,66 @@ class WebSocketTest extends TestCase
             $client->close();
 
             $this->assertNull(yield $promise);
-        }));
+        } finally {
+            $server->stop();
+        }
     }
 
-    public function testVeryLongMessage()
+    public function testVeryLongMessage(): \Generator
     {
-        Promise\wait(call(function () {
-            $options = Options::createClientDefault()
-                ->withBytesPerSecondLimit(\PHP_INT_MAX)
-                ->withFramesPerSecondLimit(\PHP_INT_MAX)
-                ->withMessageSizeLimit(1024 * 1024 * 10)
-                ->withoutCompression();
+        $options = Options::createClientDefault()
+            ->withBytesPerSecondLimit(\PHP_INT_MAX)
+            ->withFramesPerSecondLimit(\PHP_INT_MAX)
+            ->withMessageSizeLimit(1024 * 1024 * 10)
+            ->withoutCompression();
 
-            $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-                public function onConnect(Client $client, Request $request, Response $response): Promise
-                {
-                    $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
-                    return $client->sendBinary($payload);
-                }
-            });
+        [$server, $port] = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
+            public function onConnect(Client $client, Request $request, Response $response): Promise
+            {
+                $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
+                return $client->sendBinary($payload);
+            }
+        });
 
+        try {
             /** @var Client $client */
             $client = yield connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
 
             /** @var Message $message */
             $message = yield $client->receive();
             $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), yield $message->buffer());
-        }));
+        } finally {
+            $server->stop();
+        }
     }
 
-    public function testTooLongMessage()
+    public function testTooLongMessage(): \Generator
     {
-        Promise\wait(call(function () {
-            $options = Options::createClientDefault()
-                ->withBytesPerSecondLimit(\PHP_INT_MAX)
-                ->withFramesPerSecondLimit(\PHP_INT_MAX)
-                ->withMessageSizeLimit(1024 * 1024 * 10)
-                ->withoutCompression();
+        $options = Options::createClientDefault()
+            ->withBytesPerSecondLimit(\PHP_INT_MAX)
+            ->withFramesPerSecondLimit(\PHP_INT_MAX)
+            ->withMessageSizeLimit(1024 * 1024 * 10)
+            ->withoutCompression();
 
-            $port = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-                public function onConnect(Client $client, Request $request, Response $response): Promise
-                {
-                    $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
-                    return $client->sendBinary($payload);
-                }
-            });
+        [$server, $port] = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
+            public function onConnect(Client $client, Request $request, Response $response): Promise
+            {
+                $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
+                return $client->sendBinary($payload);
+            }
+        });
 
+        try {
             /** @var Client $client */
             $client = yield connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
 
-            try {
-                /** @var Message $message */
-                $message = yield $client->receive();
-                yield $message->buffer();
-            } catch (ClosedException $exception) {
-                $this->assertSame('Received payload exceeds maximum allowable size', $exception->getReason());
-            }
-        }));
+            /** @var Message $message */
+            $message = yield $client->receive();
+            yield $message->buffer();
+        } catch (ClosedException $exception) {
+            $this->assertSame('Received payload exceeds maximum allowable size', $exception->getReason());
+        } finally {
+            $server->stop();
+        }
     }
 }
