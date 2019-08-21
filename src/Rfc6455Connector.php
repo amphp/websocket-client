@@ -15,6 +15,7 @@ use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\Rfc7692CompressionFactory;
+use League\Uri;
 use function Amp\asyncCall;
 use function Amp\call;
 
@@ -111,6 +112,15 @@ class Rfc6455Connector implements Connector
     private function generateRequest(Handshake $handshake, string $key): string
     {
         $uri = $handshake->getUri();
+
+        if (!$handshake->hasHeader('origin')) {
+            $origin = Uri\Http::createFromComponents([
+                'scheme' => $uri->getScheme() === 'wss' ? 'https' : 'http',
+                'host' => $uri->getHost(),
+                'port' => $uri->getPort(),
+            ]);
+            $handshake = $handshake->withHeader('origin', (string) $origin);
+        }
 
         $headers = $handshake->getHeaders();
 
