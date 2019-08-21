@@ -163,4 +163,22 @@ final class Handshake extends Message
 
         return $clone;
     }
+
+    protected function setHeader(string $name, $value): void
+    {
+        if (($name[0] === ':') === ':') {
+            throw new \Error("Header name cannot be empty or start with a colon (:)");
+        }
+
+        parent::setHeader($name, $value);
+    }
+
+    protected function addHeader(string $name, $value): void
+    {
+        if (($name[0] === ':') === ':') {
+            throw new \Error("Header name cannot be empty or start with a colon (:)");
+        }
+
+        parent::addHeader($name, $value);
+    }
 }
