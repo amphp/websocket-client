@@ -5,6 +5,7 @@ namespace Amp\Websocket\Client;
 use Amp\CancellationToken;
 use Amp\CancelledException;
 use Amp\Deferred;
+use Amp\Http;
 use Amp\Http\Rfc7230;
 use Amp\Http\Status;
 use Amp\NullCancellationToken;
@@ -122,6 +123,20 @@ class Rfc6455Connector implements Connector
             $handshake = $handshake->withHeader('origin', (string) $origin);
         }
 
+        $extensions = \array_keys(
+            Http\createFieldValueComponentMap(
+                Http\parseFieldValueComponents($handshake, 'sec-websocket-extensions')
+            )
+        );
+
+        if ($handshake->getOptions()->isCompressionEnabled()) {
+            $extensions[] = $this->compressionFactory->createRequestHeader();
+        }
+
+        if (!empty($extensions)) {
+            $handshake = $handshake->withHeader('sec-websocket-extensions', \implode(', ', $extensions));
+        }
+
         $headers = $handshake->getHeaders();
 
         $headers['host'] = [$uri->getAuthority()];
@@ -129,10 +144,6 @@ class Rfc6455Connector implements Connector
         $headers['upgrade'] = ['websocket'];
         $headers['sec-websocket-version'] = ['13'];
         $headers['sec-websocket-key'] = [$key];
-
-        if ($handshake->getOptions()->isCompressionEnabled()) {
-            $headers['sec-websocket-extensions'] = [$this->compressionFactory->createRequestHeader()];
-        }
 
         if (($path = $uri->getPath()) === '') {
             $path = '/';
