@@ -11,6 +11,7 @@ use Amp\Http\Status;
 use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
+use Amp\Socket\ClientTlsContext;
 use Amp\Socket\ConnectContext;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
@@ -43,6 +44,7 @@ class Rfc6455Connector implements Connector
         ?ConnectContext $connectContext = null,
         ?CancellationToken $cancellationToken = null
     ): Promise {
+        $connectContext = $connectContext ?? new ConnectContext;
         $cancellationToken = $cancellationToken ?? new NullCancellationToken;
 
         return call(function () use ($handshake, $connectContext, $cancellationToken) {
@@ -51,6 +53,17 @@ class Rfc6455Connector implements Connector
                 $isEncrypted = $uri->getScheme() === 'wss';
                 $defaultPort = $isEncrypted ? 443 : 80;
                 $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $defaultPort);
+
+                if ($isEncrypted) {
+                    $tlsContext = ($connectContext->getTlsContext() ?? new ClientTlsContext($uri->getHost()))
+                        ->withPeerCapturing();
+
+                    if ($tlsContext->getPeerName() === '') {
+                        $tlsContext = $tlsContext->withPeerName($uri->getHost());
+                    }
+
+                    $connectContext = $connectContext->withTlsContext($tlsContext);
+                }
 
                 $socket = yield $this->connector->connect($authority, $connectContext, $cancellationToken);
 
