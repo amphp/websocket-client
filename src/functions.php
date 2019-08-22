@@ -32,13 +32,13 @@ function connector(?Connector $connector = null): Connector
 }
 
 /**
- * @param string|Handshake          $handshake
- * @param ConnectContext|null $connectContext
- * @param CancellationToken|null    $cancellationToken
+ * @param string|WebsocketUri|Handshake $handshake
+ * @param ConnectContext|null           $connectContext
+ * @param CancellationToken|null        $cancellationToken
  *
  * @return Promise<Connection>
  *
- * @throws \TypeError If $handshake is not a string or instance of \Amp\WebSocket\Handshake.
+ * @throws \TypeError If $handshake is not a string, instance of WebsocketUri, or instance of Handshake.
  * @throws ConnectionException If the connection could not be established.
  */
 function connect(
@@ -46,10 +46,14 @@ function connect(
     ?ConnectContext $connectContext = null,
     ?CancellationToken $cancellationToken = null
 ): Promise {
-    if (\is_string($handshake)) {
+    if (\is_string($handshake) || $handshake instanceof WebsocketUri) {
         $handshake = new Handshake($handshake);
     } elseif (!$handshake instanceof Handshake) {
-        throw new \TypeError(\sprintf('Must provide an instance of %s or a websocket URL as a string', Handshake::class));
+        throw new \TypeError(\sprintf(
+            'Must provide an instance of %s or a websocket URL as a string or instance of %s',
+            Handshake::class,
+            WebsocketUri::class
+        ));
     }
 
     return connector()->connect($handshake, $connectContext, $cancellationToken);
