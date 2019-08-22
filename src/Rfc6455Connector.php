@@ -123,18 +123,24 @@ class Rfc6455Connector implements Connector
             $handshake = $handshake->withHeader('origin', (string) $origin);
         }
 
-        $extensions = \array_keys(
-            Http\createFieldValueComponentMap(
-                Http\parseFieldValueComponents($handshake, 'sec-websocket-extensions')
-            )
-        );
+        $extensions = Http\parseFieldValueComponents($handshake, 'sec-websocket-extensions');
 
         if ($handshake->getOptions()->isCompressionEnabled()) {
-            $extensions[] = $this->compressionFactory->createRequestHeader();
+            $extensions[] = [$this->compressionFactory->createRequestHeader(), ''];
         }
 
         if (!empty($extensions)) {
-            $handshake = $handshake->withHeader('sec-websocket-extensions', \implode(', ', $extensions));
+            $pairs = [];
+            foreach ($extensions as [$name, $value]) {
+                if ($value === '') {
+                    $pairs[] = $name;
+                    continue;
+                }
+
+                $pairs[] = $name . '=' . $value;
+            }
+
+            $handshake = $handshake->withHeader('sec-websocket-extensions', \implode(', ', $pairs));
         }
 
         $headers = $handshake->getHeaders();
@@ -204,9 +210,9 @@ class Rfc6455Connector implements Connector
 
     final protected function createCompressionContext(array $headers): ?Websocket\CompressionContext
     {
-        $extensions = $headers['sec-websocket-extensions'][0] ?? '';
+        $extensions = \implode(', ', $headers['sec-websocket-extensions'] ?? []);
 
-        $extensions = \array_map('trim', \explode(',', $extensions));
+        $extensions = \array_map('trim', \array_map('strtolower', \explode(',', $extensions)));
 
         foreach ($extensions as $extension) {
             if ($compressionContext = $this->compressionFactory->fromServerHeader($extension)) {
