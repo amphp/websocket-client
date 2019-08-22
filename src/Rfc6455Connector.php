@@ -4,7 +4,6 @@ namespace Amp\Websocket\Client;
 
 use Amp\CancellationToken;
 use Amp\CancelledException;
-use Amp\Deferred;
 use Amp\Http;
 use Amp\Http\Rfc7230;
 use Amp\Http\Status;
@@ -18,7 +17,6 @@ use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\Rfc7692CompressionFactory;
 use League\Uri;
-use function Amp\asyncCall;
 use function Amp\call;
 
 class Rfc6455Connector implements Connector
@@ -78,48 +76,39 @@ class Rfc6455Connector implements Connector
                 throw new ConnectionException('Connecting to the websocket failed', 0, $exception);
             }
 
-            $deferred = new Deferred;
-            $id = $cancellationToken->subscribe([$deferred, 'fail']);
-
-            asyncCall(function () use ($socket, $handshake, $deferred) {
-                try {
-                    $key = Websocket\generateKey();
-                    yield $socket->write($this->generateRequest($handshake, $key));
-
-                    $buffer = '';
-
-                    while (($chunk = yield $socket->read()) !== null) {
-                        $buffer .= $chunk;
-
-                        if ($position = \strpos($buffer, "\r\n\r\n")) {
-                            $headerBuffer = \substr($buffer, 0, $position + 4);
-                            $buffer = \substr($buffer, $position + 4);
-
-                            $headers = $this->handleResponse($headerBuffer, $key);
-
-                            if ($buffer !== '') {
-                                $socket = new ClientSocket($socket, $buffer);
-                            }
-
-                            $deferred->resolve($this->createConnection($socket, $handshake->getOptions(), $headers));
-                            return;
-                        }
-                    }
-                } catch (ConnectionException $exception) {
-                    $deferred->fail($exception);
-                } catch (\Throwable $exception) {
-                    $deferred->fail(new ConnectionException('Performing the websocket handshake failed', 0, $exception));
-                }
-            });
+            $id = $cancellationToken->subscribe([$socket, 'close']);
 
             try {
-                return yield $deferred->promise();
-            } catch (\Throwable $exception) {
-                $socket->close(); // Close socket in case operation did not fail but was cancelled.
+                $key = Websocket\generateKey();
+                yield $socket->write($this->generateRequest($handshake, $key));
+
+                $buffer = '';
+
+                while (($chunk = yield $socket->read()) !== null) {
+                    $buffer .= $chunk;
+
+                    if ($position = \strpos($buffer, "\r\n\r\n")) {
+                        $headerBuffer = \substr($buffer, 0, $position + 4);
+                        $buffer = \substr($buffer, $position + 4);
+
+                        $headers = $this->handleResponse($headerBuffer, $key);
+
+                        $socket = new ClientSocket($socket, $buffer);
+
+                        return $this->createConnection($socket, $handshake->getOptions(), $headers);
+                    }
+                }
+            } catch (ConnectionException $exception) {
                 throw $exception;
+            } catch (\Throwable $exception) {
+                throw new ConnectionException('The websocket handshake failed', 0, $exception);
             } finally {
                 $cancellationToken->unsubscribe($id);
             }
+
+            $cancellationToken->throwIfRequested(); // Connection may have closed due to cancellation request.
+
+            throw new ConnectionException('The socket closed without a response');
         });
     }
 
