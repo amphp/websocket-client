@@ -3,9 +3,11 @@
 namespace Amp\Websocket\Client;
 
 use Amp\CancellationToken;
+use Amp\Http\Client\HttpClientBuilder;
+use Amp\Http\Client\HttpException;
 use Amp\Loop;
 use Amp\Promise;
-use Amp\Socket\ConnectContext;
+use Psr\Http\Message\UriInterface as PsrUri;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
@@ -24,7 +26,7 @@ function connector(?Connector $connector = null): Connector
             return $connector;
         }
 
-        $connector = new Rfc6455Connector;
+        $connector = new Rfc6455Connector(HttpClientBuilder::buildDefault());
     }
 
     Loop::setState(LOOP_CONNECTOR_IDENTIFIER, $connector);
@@ -32,29 +34,20 @@ function connector(?Connector $connector = null): Connector
 }
 
 /**
- * @param string|WebsocketUri|Handshake $handshake
- * @param ConnectContext|null           $connectContext
- * @param CancellationToken|null        $cancellationToken
+ * @param string|PsrUri|Handshake $handshake
+ * @param CancellationToken|null  $cancellationToken
  *
  * @return Promise<Connection>
  *
  * @throws \TypeError If $handshake is not a string, instance of WebsocketUri, or instance of Handshake.
- * @throws ConnectionException If the connection could not be established.
+ * @throws HttpException Thrown if the request fails.
+ * @throws ConnectionException If the response received is invalid or is not a switching protocols (101) response.
  */
-function connect(
-    $handshake,
-    ?ConnectContext $connectContext = null,
-    ?CancellationToken $cancellationToken = null
-): Promise {
-    if (\is_string($handshake) || $handshake instanceof WebsocketUri) {
+function connect($handshake, ?CancellationToken $cancellationToken = null): Promise
+{
+    if (!$handshake instanceof Handshake) {
         $handshake = new Handshake($handshake);
-    } elseif (!$handshake instanceof Handshake) {
-        throw new \TypeError(\sprintf(
-            'Must provide an instance of %s or a websocket URL as a string or instance of %s',
-            Handshake::class,
-            WebsocketUri::class
-        ));
     }
 
-    return connector()->connect($handshake, $connectContext, $cancellationToken);
+    return connector()->connect($handshake, $cancellationToken);
 }

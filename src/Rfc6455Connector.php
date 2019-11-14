@@ -3,129 +3,101 @@
 namespace Amp\Websocket\Client;
 
 use Amp\CancellationToken;
-use Amp\CancelledException;
+use Amp\Deferred;
 use Amp\Http;
-use Amp\Http\Rfc7230;
-use Amp\Http\Status;
-use Amp\NullCancellationToken;
+use Amp\Http\Client\HttpClient;
+use Amp\Http\Client\Request;
+use Amp\Http\Client\Response;
 use Amp\Promise;
-use Amp\Socket;
-use Amp\Socket\ClientTlsContext;
-use Amp\Socket\ConnectContext;
+use Amp\Socket\EncryptableSocket;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\Rfc7692CompressionFactory;
-use League\Uri;
 use function Amp\call;
 
 class Rfc6455Connector implements Connector
 {
+    /** @var HttpClient */
+    private $client;
+
     /** @var CompressionContextFactory */
     private $compressionFactory;
 
-    /** @var Socket\Connector */
-    private $connector;
-
     /**
+     * @param HttpClient                     $client
      * @param CompressionContextFactory|null $compressionFactory Automatically uses Rfc7692CompressionFactory if null.
-     * @param Socket\Connector|null $connector Socket connector. Global connector used if null.
      */
-    public function __construct(?CompressionContextFactory $compressionFactory = null, ?Socket\Connector $connector = null)
+    public function __construct(HttpClient $client, ?CompressionContextFactory $compressionFactory = null)
     {
+        $this->client = $client;
         $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
-        $this->connector = $connector ?? Socket\connector();
     }
 
-    public function connect(
-        Handshake $handshake,
-        ?ConnectContext $connectContext = null,
-        ?CancellationToken $cancellationToken = null
-    ): Promise {
-        $connectContext = $connectContext ?? new ConnectContext;
-        $cancellationToken = $cancellationToken ?? new NullCancellationToken;
+    public function connect(Handshake $handshake, ?CancellationToken $cancellationToken = null): Promise
+    {
+        return call(function () use ($handshake, $cancellationToken) {
+            $key = Websocket\generateKey();
+            $request = $this->generateRequest($handshake, $key);
+            $options = $handshake->getOptions();
 
-        return call(function () use ($handshake, $connectContext, $cancellationToken) {
-            try {
-                $uri = $handshake->getUri();
-                $isEncrypted = $uri->getScheme() === 'wss';
-                $defaultPort = $isEncrypted ? 443 : 80;
-                $authority = $uri->getHost() . ':' . ($uri->getPort() ?? $defaultPort);
-
-                if ($isEncrypted) {
-                    $tlsContext = ($connectContext->getTlsContext() ?? new ClientTlsContext($uri->getHost()))
-                        ->withPeerCapturing();
-
-                    if ($tlsContext->getPeerName() === '') {
-                        $tlsContext = $tlsContext->withPeerName($uri->getHost());
-                    }
-
-                    $connectContext = $connectContext->withTlsContext($tlsContext);
+            $deferred = new Deferred;
+            $request->setUpgradeHandler(function (EncryptableSocket $socket, Request $request, Response $response) use (
+                $deferred, $key, $options
+            ): void {
+                if (\strtolower($response->getHeader('upgrade')) !== 'websocket') {
+                    $deferred->fail(new ConnectionException('Upgrade header does not equal "websocket"', $response));
+                    return;
                 }
 
-                $socket = yield $this->connector->connect($authority, $connectContext, $cancellationToken);
-
-                \assert($socket instanceof Socket\EncryptableSocket);
-
-                if ($isEncrypted) {
-                    yield $socket->setupTls();
+                if (!Websocket\validateAcceptForKey($response->getHeader('sec-websocket-accept'), $key)) {
+                    $deferred->fail(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
+                    return;
                 }
-            } catch (CancelledException $exception) {
-                throw $exception;
-            } catch (\Throwable $exception) {
-                throw new ConnectionException('Connecting to the websocket failed', 0, $exception);
+
+                $deferred->resolve($this->createConnection($socket, $options, $response));
+            });
+
+            $response = yield $this->client->request($request, $cancellationToken);
+            \assert($response instanceof Response);
+
+            if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
+                throw new ConnectionException(\sprintf(
+                    'A %s (%d) response was not received; instead received response status: %s (%d)',
+                    Http\Status::getReason(Http\Status::SWITCHING_PROTOCOLS),
+                    Http\Status::SWITCHING_PROTOCOLS,
+                    $response->getReason(),
+                    $response->getStatus()
+                ), $response);
             }
 
-            $id = $cancellationToken->subscribe([$socket, 'close']);
-
-            try {
-                $key = Websocket\generateKey();
-                yield $socket->write($this->generateRequest($handshake, $key));
-
-                $buffer = '';
-
-                while (($chunk = yield $socket->read()) !== null) {
-                    $buffer .= $chunk;
-
-                    if ($position = \strpos($buffer, "\r\n\r\n")) {
-                        $headerBuffer = \substr($buffer, 0, $position + 4);
-                        $buffer = \substr($buffer, $position + 4);
-
-                        $headers = $this->handleResponse($headerBuffer, $key);
-
-                        $socket = new ClientSocket($socket, $buffer);
-
-                        return $this->createConnection($socket, $handshake->getOptions(), $headers);
-                    }
-                }
-            } catch (ConnectionException $exception) {
-                throw $exception;
-            } catch (\Throwable $exception) {
-                throw new ConnectionException('The websocket handshake failed', 0, $exception);
-            } finally {
-                $cancellationToken->unsubscribe($id);
-            }
-
-            $cancellationToken->throwIfRequested(); // Connection may have closed due to cancellation request.
-
-            throw new ConnectionException('The socket closed without a response');
+            return yield $deferred->promise();
         });
     }
 
-    private function generateRequest(Handshake $handshake, string $key): string
+    /**
+     * @param Handshake $handshake
+     * @param string    $key
+     *
+     * @return Request
+     */
+    private function generateRequest(Handshake $handshake, string $key): Request
     {
         $uri = $handshake->getUri();
+        $uri = $uri->withScheme($uri->getScheme() === 'wss' ? 'https' : 'http');
 
-        if (!$handshake->hasHeader('origin')) {
-            $origin = Uri\Http::createFromComponents([
-                'scheme' => $uri->getScheme() === 'wss' ? 'https' : 'http',
-                'host' => $uri->getHost(),
-                'port' => $uri->getPort(),
-            ]);
-            $handshake = $handshake->withHeader('origin', (string) $origin);
+        $request = new Request($uri, 'GET');
+        $request->setHeaders($handshake->getHeaders());
+
+        if (!$request->hasHeader('origin')) {
+            $origin = $uri
+                ->withUserInfo('')
+                ->withPath('')
+                ->withQuery('');
+            $request->setHeader('origin', (string) $origin);
         }
 
-        $extensions = Http\parseFieldValueComponents($handshake, 'sec-websocket-extensions');
+        $extensions = Http\parseFieldValueComponents($request, 'sec-websocket-extensions');
 
         if ($handshake->getOptions()->isCompressionEnabled()) {
             $extensions[] = [$this->compressionFactory->createRequestHeader(), ''];
@@ -142,77 +114,26 @@ class Rfc6455Connector implements Connector
                 $pairs[] = $name . '=' . $value;
             }
 
-            $handshake = $handshake->withHeader('sec-websocket-extensions', \implode(', ', $pairs));
+            $request->setHeader('sec-websocket-extensions', \implode(', ', $pairs));
         }
 
-        $headers = $handshake->getHeaders();
+        $request->setProtocolVersions(['1.1']);
+        $request->setHeader('connection', 'Upgrade');
+        $request->setHeader('upgrade', 'websocket');
+        $request->setHeader('sec-websocket-version', '13');
+        $request->setHeader('sec-websocket-key', $key);
 
-        $headers['host'] = [$uri->getAuthority()];
-        $headers['connection'] = ['Upgrade'];
-        $headers['upgrade'] = ['websocket'];
-        $headers['sec-websocket-version'] = ['13'];
-        $headers['sec-websocket-key'] = [$key];
-
-        if (($path = $uri->getPath()) === '') {
-            $path = '/';
-        }
-
-        if (($query = $uri->getQuery()) !== '') {
-            $path .= '?' . $query;
-        }
-
-        return \sprintf("GET %s HTTP/1.1\r\n%s\r\n", $path, Rfc7230::formatHeaders($headers));
+        return $request;
     }
 
-    private function handleResponse(string $headerBuffer, string $key): array
+    /**
+     * @param Response $response
+     *
+     * @return Websocket\CompressionContext|null
+     */
+    final protected function createCompressionContext(Response $response): ?Websocket\CompressionContext
     {
-        if (\substr($headerBuffer, -4) !== "\r\n\r\n") {
-            throw new ConnectionException('Invalid header provided');
-        }
-
-        $position = \strpos($headerBuffer, "\r\n");
-        $startLine = \substr($headerBuffer, 0, $position);
-
-        if (!\preg_match("/^HTTP\/(1\.[01]) (\d{3}) ([^\x01-\x08\x10-\x19]*)$/i", $startLine, $matches)) {
-            throw new ConnectionException('Invalid response start line: ' . $startLine);
-        }
-
-        $version = $matches[1];
-        $status = (int) $matches[2];
-        $reason = $matches[3];
-
-        if ($version !== '1.1' || $status !== Status::SWITCHING_PROTOCOLS) {
-            throw new ConnectionException(
-                \sprintf('Did not receive switching protocols response: %d %s', $status, $reason),
-                $status
-            );
-        }
-
-        $headerBuffer = \substr($headerBuffer, $position + 2, -2);
-
-        $headers = Rfc7230::parseHeaders($headerBuffer);
-
-        $upgrade = $headers['upgrade'][0] ?? '';
-        if (\strtolower($upgrade) !== 'websocket') {
-            throw new ConnectionException('Missing "Upgrade: websocket" header');
-        }
-
-        $connection = $headers['connection'][0] ?? '';
-        if (!\in_array('upgrade', \array_map('trim', \array_map('strtolower', \explode(',', $connection))), true)) {
-            throw new ConnectionException('Missing "Connection: upgrade" header');
-        }
-
-        $secWebsocketAccept = $headers['sec-websocket-accept'][0] ?? '';
-        if (!Websocket\validateAcceptForKey($secWebsocketAccept, $key)) {
-            throw new ConnectionException('Invalid "Sec-WebSocket-Accept" header');
-        }
-
-        return $headers;
-    }
-
-    final protected function createCompressionContext(array $headers): ?Websocket\CompressionContext
-    {
-        $extensions = \implode(', ', $headers['sec-websocket-extensions'] ?? []);
+        $extensions = \implode(', ', $response->getHeaderArray('sec-websocket-extensions'));
 
         $extensions = \array_map('trim', \array_map('strtolower', \explode(',', $extensions)));
 
@@ -225,13 +146,13 @@ class Rfc6455Connector implements Connector
         return null;
     }
 
-    protected function createConnection(Socket\EncryptableSocket $socket, Websocket\Options $options, array $headers): Connection
+    protected function createConnection(EncryptableSocket $socket, Websocket\Options $options, Response $response): Connection
     {
         if ($options->isCompressionEnabled()) {
-            $compressionContext = $this->createCompressionContext($headers);
+            $compressionContext = $this->createCompressionContext($response);
         }
 
         $client = new Rfc6455Client($socket, $options, true, $compressionContext ?? null);
-        return new Rfc6455Connection($client, $headers);
+        return new Rfc6455Connection($client, $response->getHeaders());
     }
 }
