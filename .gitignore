@@ -5,3 +5,4 @@ docs/Gemfile.lock
 phpunit.xml
 vendor
 reports
+.phpunit.result.cache

@@ -7,17 +7,28 @@ use Amp\Http\Server\Response;
 use Amp\Promise;
 use Amp\Success;
 use Amp\Websocket\Client;
+use Amp\Websocket\Server\ClientHandler;
 use Amp\Websocket\Server\Websocket;
 
-class WebsocketAdapter extends Websocket
+class WebsocketAdapter implements ClientHandler
 {
-    public function onHandshake(Request $request, Response $response): Promise
+    public function onStart(Websocket $endpoint): Promise
+    {
+        return new Success; // nothing to do
+    }
+
+    public function onStop(Websocket $endpoint): Promise
+    {
+        return new Success; // nothing to do
+    }
+
+    public function handleHandshake(Request $request, Response $response): Promise
     {
         return new Success($response);
     }
 
-    public function onConnect(Client $client, Request $request, Response $response): ?Promise
+    public function handleClient(Client $client, Request $request, Response $response): Promise
     {
-        return null;
+        return new Success;
     }
 }

@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection PhpUnhandledExceptionInspection */
 
 namespace Amp\Websocket\Client\Test;
 
@@ -8,6 +8,7 @@ use Amp\Http\Server\Server;
 use Amp\PHPUnit\AsyncTestCase;
 use Amp\Promise;
 use Amp\Socket\Server as SocketServer;
+use Amp\Socket\SocketException;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Message;
@@ -25,6 +26,7 @@ class WebSocketTest extends AsyncTestCase
      * @param Websocket $websocket
      *
      * @return Promise<int> Resolves to the used port number.
+     * @throws SocketException
      */
     public function createServer(Websocket $websocket): Promise
     {
@@ -34,7 +36,7 @@ class WebSocketTest extends AsyncTestCase
 
         $server = new Server([$socket], $websocket, new NullLogger);
 
-        return call(function () use ($server, $port) {
+        return call(static function () use ($server, $port) {
             yield $server->start();
             return [$server, $port];
         });
@@ -42,10 +44,10 @@ class WebSocketTest extends AsyncTestCase
 
     public function testSimpleBinaryEcho(): \Generator
     {
-        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-            public function onConnect(Client $client, Request $request, Response $response): Promise
+        [$server, $port] = yield $this->createServer(new Websocket(new class extends Helper\WebsocketAdapter {
+            public function handleClient(Client $client, Request $request, Response $response): Promise
             {
-                return call(function () use ($client) {
+                return call(static function () use ($client) {
                     while ($message = yield $client->receive()) {
                         \assert($message instanceof Message);
                         if ($message->isBinary()) {
@@ -56,7 +58,7 @@ class WebSocketTest extends AsyncTestCase
                     }
                 });
             }
-        });
+        }));
 
         try {
             /** @var Client $client */
@@ -81,10 +83,10 @@ class WebSocketTest extends AsyncTestCase
 
     public function testSimpleTextEcho(): \Generator
     {
-        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-            public function onConnect(Client $client, Request $request, Response $response): Promise
+        [$server, $port] = yield $this->createServer(new Websocket(new class extends Helper\WebsocketAdapter {
+            public function handleClient(Client $client, Request $request, Response $response): Promise
             {
-                return call(function () use ($client) {
+                return call(static function () use ($client) {
                     while ($message = yield $client->receive()) {
                         \assert($message instanceof Message);
                         if ($message->isBinary()) {
@@ -95,7 +97,7 @@ class WebSocketTest extends AsyncTestCase
                     }
                 });
             }
-        });
+        }));
 
         try {
             /** @var Client $client */
@@ -120,15 +122,15 @@ class WebSocketTest extends AsyncTestCase
 
     public function testUnconsumedMessage(): \Generator
     {
-        [$server, $port] = yield $this->createServer(new class extends Helper\WebsocketAdapter {
-            public function onConnect(Client $client, Request $request, Response $response): Promise
+        [$server, $port] = yield $this->createServer(new Websocket(new class extends Helper\WebsocketAdapter {
+            public function handleClient(Client $client, Request $request, Response $response): Promise
             {
-                return call(function () use ($client) {
+                return call(static function () use ($client) {
                     yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
                     yield $client->send('Message');
                 });
             }
-        });
+        }));
 
         try {
             /** @var Client $client */
@@ -163,13 +165,13 @@ class WebSocketTest extends AsyncTestCase
             ->withMessageSizeLimit(1024 * 1024 * 10)
             ->withoutCompression();
 
-        [$server, $port] = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-            public function onConnect(Client $client, Request $request, Response $response): Promise
+        [$server, $port] = yield $this->createServer(new Websocket(new class extends Helper\WebsocketAdapter {
+            public function handleClient(Client $client, Request $request, Response $response): Promise
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
                 return $client->sendBinary($payload);
             }
-        });
+        }));
 
         try {
             /** @var Client $client */
@@ -191,13 +193,13 @@ class WebSocketTest extends AsyncTestCase
             ->withMessageSizeLimit(1024 * 1024 * 10)
             ->withoutCompression();
 
-        [$server, $port] = yield $this->createServer(new class($options) extends Helper\WebsocketAdapter {
-            public function onConnect(Client $client, Request $request, Response $response): Promise
+        [$server, $port] = yield $this->createServer(new Websocket(new class() extends Helper\WebsocketAdapter {
+            public function handleClient(Client $client, Request $request, Response $response): Promise
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
                 return $client->sendBinary($payload);
             }
-        });
+        }));
 
         try {
             /** @var Client $client */
