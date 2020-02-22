@@ -17,11 +17,11 @@ final class Handshake extends Message
 
     /**
      * @param string|PsrUri       $uri target address of websocket (e.g. ws://foo.bar/bar or a
-     *                                 wss://crypto.example/?secureConnection) or a WebsocketUri instance.
+     *                                 wss://crypto.example/?secureConnection) or a PsrUri instance.
      * @param Options|null        $options
      * @param string[]|string[][] $headers
      *
-     * @throws \TypeError If $uri is not a string or an instance of WebsocketUri.
+     * @throws \TypeError If $uri is not a string or an instance of PsrUri.
      * @throws \Error If compression is enabled in the options but the zlib extension is not installed.
      */
     public function __construct($uri, ?Options $options = null, array $headers = [])

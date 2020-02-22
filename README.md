@@ -16,16 +16,16 @@ composer require amphp/websocket-client
 
 ## Requirements
 
-* PHP 7.1+
+* PHP 7.2+
 
 ## Documentation & Examples
 
 More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
-use Amp\Delayed;
 use Amp\Websocket\Client\Connection;
 use Amp\Websocket\Message;
+use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
 // Connects to the Kaazing echoing websocket demo.
@@ -46,7 +46,7 @@ Amp\Loop::run(function () {
             break;
         }
 
-        yield new Delayed(1000);
+        yield delay(1000); // Pause the coroutine for 1 second.
 
         if ($i < 3) {
             yield $connection->send("Ping: " . ++$i);
