@@ -1,4 +1,4 @@
-sudo: required
+os: linux
 
 language: php
 
@@ -8,12 +8,11 @@ services:
 php:
   - 7.2
   - 7.3
-  - 7.4snapshot
+  - 7.4
   - nightly
 
-matrix:
+jobs:
   allow_failures:
-    - php: 7.4snapshot
     - php: nightly
   fast_finish: true
 
@@ -21,7 +20,6 @@ env:
   - AMP_DEBUG=true
 
 before_install:
-  - phpenv config-rm xdebug.ini || echo "No xdebug config."
   - docker pull crossbario/autobahn-testsuite
   - docker run -d -v ${PWD}/test-autobahn/config:/config -v ${PWD}/test-autobahn/reports:/reports -p 9001:9001 --name fuzzingserver crossbario/autobahn-testsuite
 
@@ -35,14 +33,14 @@ install:
   - composer show
 
 script:
-  - phpdbg -qrr vendor/bin/phpunit --verbose --coverage-php coverage/cov/main.cov
+  - vendor/bin/phpunit --verbose --coverage-php coverage/cov/main.cov
   - php test-autobahn/runner.php
   - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix
 
 after_script:
   - curl -OL https://github.com/php-coveralls/php-coveralls/releases/download/v1.0.0/coveralls.phar
   - chmod +x coveralls.phar
-  - phpdbg -qrr coverage/bin/phpcov merge --clover build/logs/clover.xml coverage/cov
+  - coverage/bin/phpcov merge --clover build/logs/clover.xml coverage/cov
   - ./coveralls.phar
 
 cache:
