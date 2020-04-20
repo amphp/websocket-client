@@ -2,6 +2,7 @@
 
 namespace Amp\Websocket\Client;
 
+use Amp\Http\Client\Request;
 use Amp\Http\Message;
 use Amp\Websocket\Options;
 use League\Uri;
@@ -14,6 +15,15 @@ final class Handshake extends Message
 
     /** @var Options */
     private $options;
+
+    /** @var int */
+    private $tcpConnectTimeout = 10000;
+
+    /** @var int */
+    private $tlsHandshakeTimeout = 10000;
+
+    /** @var int */
+    private $headerSizeLimit = Request::DEFAULT_HEADER_SIZE_LIMIT;
 
     /**
      * @param string|PsrUri       $uri target address of websocket (e.g. ws://foo.bar/bar or a
@@ -110,6 +120,51 @@ final class Handshake extends Message
         }
 
         return $options;
+    }
+
+    /**
+     * @return int Timeout in milliseconds for the TCP connection.
+     */
+    public function getTcpConnectTimeout(): int
+    {
+        return $this->tcpConnectTimeout;
+    }
+
+    public function withTcpConnectTimeout(int $tcpConnectTimeout): self
+    {
+        $clone = clone $this;
+        $clone->tcpConnectTimeout = $tcpConnectTimeout;
+
+        return $clone;
+    }
+
+    /**
+     * @return int Timeout in milliseconds for the TLS handshake.
+     */
+    public function getTlsHandshakeTimeout(): int
+    {
+        return $this->tlsHandshakeTimeout;
+    }
+
+    public function withTlsHandshakeTimeout(int $tlsHandshakeTimeout): self
+    {
+        $clone = clone $this;
+        $clone->tlsHandshakeTimeout = $tlsHandshakeTimeout;
+
+        return $clone;
+    }
+
+    public function getHeaderSizeLimit(): int
+    {
+        return $this->headerSizeLimit;
+    }
+
+    public function withHeaderSizeLimit(int $headerSizeLimit): self
+    {
+        $clone = clone $this;
+        $clone->headerSizeLimit = $headerSizeLimit;
+
+        return $clone;
     }
 
     /**

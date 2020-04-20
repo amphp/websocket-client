@@ -89,6 +89,10 @@ class Rfc6455Connector implements Connector
         $request = new Request($uri, 'GET');
         $request->setHeaders($handshake->getHeaders());
 
+        $request->setTcpConnectTimeout($handshake->getTcpConnectTimeout());
+        $request->setTlsHandshakeTimeout($handshake->getTlsHandshakeTimeout());
+        $request->setHeaderSizeLimit($handshake->getHeaderSizeLimit());
+
         if (!$request->hasHeader('origin')) {
             $origin = $uri
                 ->withUserInfo('')
