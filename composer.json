@@ -40,7 +40,7 @@
     },
     "require-dev": {
         "amphp/http-server": "^2",
-        "amphp/websocket-server": "^2-rc2",
+        "amphp/websocket-server": "^2-rc3",
         "amphp/phpunit-util": "^1.1",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpunit/phpunit": "^8 || ^7",
