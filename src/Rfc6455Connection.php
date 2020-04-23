@@ -3,7 +3,7 @@
 namespace Amp\Websocket\Client;
 
 use Amp\ByteStream\InputStream;
-use Amp\Http\Message;
+use Amp\Http\Client\Response;
 use Amp\Promise;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
@@ -17,38 +17,18 @@ final class Rfc6455Connection implements Connection
     /** @var Rfc6455Client */
     private $client;
 
-    /** @var Message */
-    private $headers;
+    /** @var Response */
+    private $response;
 
-    public function __construct(Rfc6455Client $client, array $headers)
+    public function __construct(Rfc6455Client $client, Response $response)
     {
         $this->client = $client;
-        $this->headers = new class($headers) extends Message {
-            public function __construct(array $headers)
-            {
-                $this->setHeaders($headers);
-            }
-        };
+        $this->response = $response;
     }
 
-    public function getHeaders(): array
+    public function getResponse(): Response
     {
-        return $this->headers->getHeaders();
-    }
-
-    public function getHeaderArray(string $name): array
-    {
-        return $this->headers->getHeaderArray($name);
-    }
-
-    public function getHeader(string $name): ?string
-    {
-        return $this->headers->getHeader($name);
-    }
-
-    public function hasHeader(string $name): bool
-    {
-        return $this->headers->hasHeader($name);
+        return $this->response;
     }
 
     public function receive(): Promise
