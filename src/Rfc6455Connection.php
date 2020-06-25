@@ -66,9 +66,9 @@ final class Rfc6455Connection implements Connection
         return $this->client->getTlsInfo();
     }
 
-    public function didPeerInitiateClose(): bool
+    public function isClosedByPeer(): bool
     {
-        return $this->client->didPeerInitiateClose();
+        return $this->client->isClosedByPeer();
     }
 
     public function getUnansweredPingCount(): int
