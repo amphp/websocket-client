@@ -55,12 +55,12 @@ final class Rfc6455Connector implements Connector
             $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
                 $connectionFactory, $compressionFactory, $deferred, $key, $options
             ): void {
-                if (\strtolower($response->getHeader('upgrade')) !== 'websocket') {
+                if (\strtolower((string) $response->getHeader('upgrade')) !== 'websocket') {
                     $deferred->fail(new ConnectionException('Upgrade header does not equal "websocket"', $response));
                     return;
                 }
 
-                if (!Websocket\validateAcceptForKey($response->getHeader('sec-websocket-accept'), $key)) {
+                if (!Websocket\validateAcceptForKey((string) $response->getHeader('sec-websocket-accept'), $key)) {
                     $deferred->fail(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
                     return;
                 }
@@ -76,8 +76,8 @@ final class Rfc6455Connector implements Connector
                 $deferred->resolve($connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null));
             });
 
+            /** @var Response $response */
             $response = yield $this->client->request($request, $cancellationToken);
-            \assert($response instanceof Response);
 
             if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
                 throw new ConnectionException(\sprintf(

@@ -32,8 +32,9 @@ install:
 
 script:
   - vendor/bin/phpunit --verbose --coverage-php coverage/cov/main.cov
-  - php test-autobahn/runner.php
   - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix
+  - vendor/bin/psalm
+  - php test-autobahn/runner.php
 
 after_script:
   - wget https://github.com/php-coveralls/php-coveralls/releases/download/v2.2.0/php-coveralls.phar

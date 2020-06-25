@@ -50,7 +50,7 @@ final class Handshake extends Message
     }
 
     /**
-     * @param $uri string|PsrUri
+     * @param string|PsrUri $uri
      *
      * @return self Cloned object
      */
@@ -62,6 +62,11 @@ final class Handshake extends Message
         return $clone;
     }
 
+    /**
+     * @param string|PsrUri $uri
+     *
+     * @return PsrUri
+     */
     private function makeUri($uri): PsrUri
     {
         if (\is_string($uri)) {
@@ -72,6 +77,7 @@ final class Handshake extends Message
             }
         }
 
+        /** @psalm-suppress DocblockTypeContradiction */
         if (!$uri instanceof PsrUri) {
             throw new \TypeError(\sprintf('Must provide an instance of %s or a websocket URI as a string', PsrUri::class));
         }
@@ -231,7 +237,7 @@ final class Handshake extends Message
 
     protected function setHeader(string $name, $value): void
     {
-        if (($name[0] === ':') === ':') {
+        if (($name[0] ?? ':') === ':') {
             throw new \Error("Header name cannot be empty or start with a colon (:)");
         }
 
@@ -240,7 +246,7 @@ final class Handshake extends Message
 
     protected function addHeader(string $name, $value): void
     {
-        if (($name[0] === ':') === ':') {
+        if (($name[0] ?? ':') === ':') {
             throw new \Error("Header name cannot be empty or start with a colon (:)");
         }
 

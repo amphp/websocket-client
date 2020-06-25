@@ -6,6 +6,7 @@ use Amp\Http\Client\Response;
 
 final class ConnectionException extends \Exception
 {
+    /** @var Response */
     private $response;
 
     public function __construct(string $message, Response $response, ?\Throwable $previous = null)
