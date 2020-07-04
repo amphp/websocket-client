@@ -88,7 +88,7 @@ final class Handshake extends Message
                 break;
 
             default:
-                throw new \Error('The URI scheme must be ws or wss');
+                throw new \Error('The URI scheme must be ws or wss: \'' . $uri->getScheme() . '\'');
         }
 
         return $uri;
@@ -183,6 +183,11 @@ final class Handshake extends Message
     public function withHeaders(array $headers): self
     {
         $clone = clone $this;
+
+        foreach ($clone->getRawHeaders() as [$field]) {
+            $clone->removeHeader($field);
+        }
+
         $clone->setHeaders($headers);
 
         return $clone;
