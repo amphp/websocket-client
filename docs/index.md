@@ -18,22 +18,21 @@ composer require amphp/websocket-client
 
 ## Connecting
 
-A new WebSocket connection is created using `Amp\Websocket\connect()`.
+You can create new WebSocket connections using `Amp\Websocket\connect()`.
 It accepts a string as first argument, which must use the `ws` or `wss` (WebSocket over TLS) scheme.
-Further optional arguments are `ClientConnectContext`, `ClientTlsContext` and `Options`, which usually don't need to be customized.
-
-If you need to send additional headers with the initial handshake, you can pass a `Handshake` object as first argument instead of a string with the URL.
+`Options` can be specified by passing a `Handshake` object instead of a string as first argument, which can also be used to pass additional headers with the initial handshake.
+Further optional arguments are `ConnectContext`, and a `CancellationToken`.
 
 ```php
 <?php
 
 require 'vendor/autoload.php';
 
-use Amp\Websocket;
+use Amp\Websocket\Client;
 
 Amp\Loop::run(function () {
-    /** @var Websocket\Connection $connection */
-    $connection = yield Websocket\connect('ws://localhost:1337/ws');
+    /** @var Client\Connection $connection */
+    $connection = yield Client\connect('ws://localhost:1337/ws');
 
     // do something
 });
@@ -45,18 +44,16 @@ WebSocket messages can be sent using the `send()` and `sendBinary()` methods.
 Text messages sent with `send()` must be valid UTF-8.
 Binary messages send with `sendBinary()` can be arbitrary data.
 
-Both methods return a `Promise` that is resolved as soon as the message is fully written to the send buffer. This doesn't neither mean that the message has been received by the other party nor that the message even left the local system's send buffer, yet.
+Both methods return a `Promise` that is resolved as soon as the message has been fully written to the send buffer. This doesn't mean that the message has been received by the other party or that the message even left the local system's send buffer, yet.
 
 ## Receiving Data
 
 WebSocket messages can be received using the `receive()` method. The `Promise` returned from `receive()` resolves once the client has started to receive a message. This allows streaming WebSocket messages, which might be pretty large. In practice, most messages are rather small, and it's fine buffering them completely. The `Promise` returned from `receive()` resolves to a `Message`, which allows easy buffered and streamed consumption.
 
 {:.note}
-> `Amp\Websocket\Message` differs from `Amp\ByteStream\Message`.
-> While `Amp\ByteStream\Message` directly implements `Promise`, this is not possible for promise resolution values.
-> Instead a consumer has to call `Amp\Websocket\Message::buffer()` which returns a `Promise` resolving to the entire message contents.
->
-> A future version of `amphp/byte-stream` will change `Amp\ByteStream\Message` in a similar way or add a replacement.
+> `Amp\Websocket\Message` differs from the now deprecated `Amp\ByteStream\Message`.
+> `Amp\ByteStream\Message` directly implemented `Promise`, which is not possible for promise resolution values and has been confusing for most users.
+> A consumer has to call `Amp\Websocket\Message::buffer()` which returns a `Promise` resolving to the entire message contents like in `Amp\ByteStream\Payload`.
 
 ## Demo
 
@@ -69,10 +66,11 @@ require 'vendor/autoload.php';
 
 use Amp\Delayed;
 use Amp\Websocket;
+use Amp\Websocket\Client;
 
 Amp\Loop::run(function () {
-    /** @var Websocket\Connection $connection */
-    $connection = yield Websocket\connect('ws://demos.kaazing.com/echo');
+    /** @var Client\Connection $connection */
+    $connection = yield Client\connect('ws://demos.kaazing.com/echo');
     yield $connection->send('Hello!');
 
     $i = 0;
