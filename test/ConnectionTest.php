@@ -14,7 +14,7 @@ use Amp\Websocket\ClosedException;
 use Amp\Websocket\Message;
 use Amp\Websocket\Options;
 use Amp\Websocket\Server\ClientHandler;
-use Amp\Websocket\Server\Endpoint;
+use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
 use function Amp\call;
@@ -47,7 +47,7 @@ class ConnectionTest extends AsyncTestCase
     public function testSimpleBinaryEcho(): \Generator
     {
         [$server, $port] = yield $this->createServer(new class extends Helper\EmptyClientHandler {
-            public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
             {
                 return call(static function () use ($client) {
                     while ($message = yield $client->receive()) {
@@ -86,7 +86,7 @@ class ConnectionTest extends AsyncTestCase
     public function testSimpleTextEcho(): \Generator
     {
         [$server, $port] = yield $this->createServer(new class extends Helper\EmptyClientHandler {
-            public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
             {
                 return call(static function () use ($client) {
                     while ($message = yield $client->receive()) {
@@ -125,7 +125,7 @@ class ConnectionTest extends AsyncTestCase
     public function testUnconsumedMessage(): \Generator
     {
         [$server, $port] = yield $this->createServer(new class extends Helper\EmptyClientHandler {
-            public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
             {
                 return call(static function () use ($client) {
                     yield $client->send(\str_repeat('.', 1024 * 1024 * 1));
@@ -168,7 +168,7 @@ class ConnectionTest extends AsyncTestCase
             ->withoutCompression();
 
         [$server, $port] = yield $this->createServer(new class extends Helper\EmptyClientHandler {
-            public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
                 return $client->sendBinary($payload);
@@ -196,7 +196,7 @@ class ConnectionTest extends AsyncTestCase
             ->withoutCompression();
 
         [$server, $port] = yield $this->createServer(new class() extends Helper\EmptyClientHandler {
-            public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
                 return $client->sendBinary($payload);

@@ -8,16 +8,16 @@ use Amp\Promise;
 use Amp\Success;
 use Amp\Websocket\Client;
 use Amp\Websocket\Server\ClientHandler;
-use Amp\Websocket\Server\Endpoint;
+use Amp\Websocket\Server\Gateway;
 
 abstract class EmptyClientHandler implements ClientHandler
 {
-    public function handleHandshake(Endpoint $endpoint, Request $request, Response $response): Promise
+    public function handleHandshake(Gateway $gateway, Request $request, Response $response): Promise
     {
         return new Success($response);
     }
 
-    public function handleClient(Endpoint $endpoint, Client $client, Request $request, Response $response): Promise
+    public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): Promise
     {
         return new Success;
     }
