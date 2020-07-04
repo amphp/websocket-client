@@ -2,9 +2,10 @@
 
 namespace Amp\Websocket\Client;
 
+use Amp\Http\Client\HttpException;
 use Amp\Http\Client\Response;
 
-final class ConnectionException extends \Exception
+final class ConnectionException extends HttpException
 {
     /** @var Response */
     private $response;
