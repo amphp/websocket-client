@@ -121,7 +121,7 @@ final class Rfc6455Connector implements Connector
 
         $extensions = self::splitField($request, 'sec-websocket-extensions');
 
-        if ($handshake->getOptions()->isCompressionEnabled()) {
+        if ($handshake->getOptions()->isCompressionEnabled() && \extension_loaded('zlib')) {
             $extensions[] = $this->compressionFactory->createRequestHeader();
         }
 

@@ -32,7 +32,6 @@ final class Handshake extends Message
      * @param string[]|string[][] $headers
      *
      * @throws \TypeError If $uri is not a string or an instance of PsrUri.
-     * @throws \Error If compression is enabled in the options but the zlib extension is not installed.
      */
     public function __construct($uri, ?Options $options = null, array $headers = [])
     {
@@ -63,38 +62,6 @@ final class Handshake extends Message
     }
 
     /**
-     * @param string|PsrUri $uri
-     *
-     * @return PsrUri
-     */
-    private function makeUri($uri): PsrUri
-    {
-        if (\is_string($uri)) {
-            try {
-                $uri = Uri\Http::createFromString($uri);
-            } catch (\Exception $exception) {
-                throw new \Error('Invalid Websocket URI provided', 0, $exception);
-            }
-        }
-
-        /** @psalm-suppress DocblockTypeContradiction */
-        if (!$uri instanceof PsrUri) {
-            throw new \TypeError(\sprintf('Must provide an instance of %s or a websocket URI as a string', PsrUri::class));
-        }
-
-        switch ($uri->getScheme()) {
-            case 'ws':
-            case 'wss':
-                break;
-
-            default:
-                throw new \Error('The URI scheme must be ws or wss: \'' . $uri->getScheme() . '\'');
-        }
-
-        return $uri;
-    }
-
-    /**
      * @return Options
      */
     public function getOptions(): Options
@@ -113,19 +80,6 @@ final class Handshake extends Message
         $clone->options = $clone->checkOptions($options);
 
         return $clone;
-    }
-
-    private function checkOptions(?Options $options): Options
-    {
-        if ($options === null) {
-            return Options::createClientDefault();
-        }
-
-        if ($options->isCompressionEnabled() && !\extension_loaded('zlib')) {
-            throw new \Error('Compression is enabled in options, but the zlib extension is not loaded');
-        }
-
-        return $options;
     }
 
     /**
@@ -256,5 +210,49 @@ final class Handshake extends Message
         }
 
         parent::addHeader($name, $value);
+    }
+
+    /**
+     * @param string|PsrUri $uri
+     *
+     * @return PsrUri
+     */
+    private function makeUri($uri): PsrUri
+    {
+        if (\is_string($uri)) {
+            try {
+                $uri = Uri\Http::createFromString($uri);
+            } catch (\Exception $exception) {
+                throw new \Error('Invalid Websocket URI provided', 0, $exception);
+            }
+        }
+
+        /** @psalm-suppress DocblockTypeContradiction */
+        if (!$uri instanceof PsrUri) {
+            throw new \TypeError(\sprintf(
+                'Must provide an instance of %s or a websocket URI as a string',
+                PsrUri::class
+            ));
+        }
+
+        switch ($uri->getScheme()) {
+            case 'ws':
+            case 'wss':
+                break;
+
+            default:
+                throw new \Error('The URI scheme must be ws or wss: \'' . $uri->getScheme() . '\'');
+        }
+
+        return $uri;
+    }
+
+    private function checkOptions(?Options $options): Options
+    {
+        if ($options === null) {
+            return Options::createClientDefault();
+        }
+
+        return $options;
     }
 }
