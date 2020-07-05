@@ -13,7 +13,7 @@ interface ConnectionFactory
      * @param Response                $response
      * @param Socket                  $socket
      * @param Options                 $options
-     * @param CompressionContext|null $compressionFactory
+     * @param CompressionContext|null $compressionContext
      *
      * @return Connection
      */
@@ -21,6 +21,6 @@ interface ConnectionFactory
         Response $response,
         Socket $socket,
         Options $options,
-        ?CompressionContext $compressionFactory = null
+        ?CompressionContext $compressionContext = null
     ): Connection;
 }
