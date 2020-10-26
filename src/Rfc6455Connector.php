@@ -9,23 +9,19 @@ use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
 use Amp\Http\Message;
-use Amp\Promise;
 use Amp\Socket\EncryptableSocket;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc7692CompressionFactory;
-use function Amp\call;
+use function Amp\await;
 
 final class Rfc6455Connector implements Connector
 {
-    /** @var HttpClient */
-    private $client;
+    private HttpClient $client;
 
-    /** @var ConnectionFactory */
-    private $connectionFactory;
+    private ConnectionFactory $connectionFactory;
 
-    /** @var CompressionContextFactory */
-    private $compressionFactory;
+    private CompressionContextFactory $compressionFactory;
 
     /**
      * @param HttpClient                     $client
@@ -42,55 +38,52 @@ final class Rfc6455Connector implements Connector
         $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
     }
 
-    public function connect(Handshake $handshake, ?CancellationToken $cancellationToken = null): Promise
+    public function connect(Handshake $handshake, ?CancellationToken $cancellationToken = null): Connection
     {
-        return call(function () use ($handshake, $cancellationToken) {
-            $key = Websocket\generateKey();
-            $request = $this->generateRequest($handshake, $key);
-            $options = $handshake->getOptions();
+        $key = Websocket\generateKey();
+        $request = $this->generateRequest($handshake, $key);
+        $options = $handshake->getOptions();
 
-            $deferred = new Deferred;
-            $connectionFactory = $this->connectionFactory;
-            $compressionFactory = $this->compressionFactory;
-            $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
-                $connectionFactory, $compressionFactory, $deferred, $key, $options
-            ): void {
-                if (\strtolower((string) $response->getHeader('upgrade')) !== 'websocket') {
-                    $deferred->fail(new ConnectionException('Upgrade header does not equal "websocket"', $response));
-                    return;
-                }
-
-                if (!Websocket\validateAcceptForKey((string) $response->getHeader('sec-websocket-accept'), $key)) {
-                    $deferred->fail(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
-                    return;
-                }
-
-                $extensions = self::splitField($response, 'sec-websocket-extensions');
-
-                foreach ($extensions as $extension) {
-                    if ($compressionContext = $compressionFactory->fromServerHeader($extension)) {
-                        break;
-                    }
-                }
-
-                $deferred->resolve($connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null));
-            });
-
-            /** @var Response $response */
-            $response = yield $this->client->request($request, $cancellationToken);
-
-            if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
-                throw new ConnectionException(\sprintf(
-                    'A %s (%d) response was not received; instead received response status: %s (%d)',
-                    Http\Status::getReason(Http\Status::SWITCHING_PROTOCOLS),
-                    Http\Status::SWITCHING_PROTOCOLS,
-                    $response->getReason(),
-                    $response->getStatus()
-                ), $response);
+        $deferred = new Deferred;
+        $connectionFactory = $this->connectionFactory;
+        $compressionFactory = $this->compressionFactory;
+        $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
+            $connectionFactory, $compressionFactory, $deferred, $key, $options
+        ): void {
+            if (\strtolower((string) $response->getHeader('upgrade')) !== 'websocket') {
+                $deferred->fail(new ConnectionException('Upgrade header does not equal "websocket"', $response));
+                return;
             }
 
-            return yield $deferred->promise();
+            if (!Websocket\validateAcceptForKey((string) $response->getHeader('sec-websocket-accept'), $key)) {
+                $deferred->fail(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
+                return;
+            }
+
+            $extensions = self::splitField($response, 'sec-websocket-extensions');
+
+            foreach ($extensions as $extension) {
+                if ($compressionContext = $compressionFactory->fromServerHeader($extension)) {
+                    break;
+                }
+            }
+
+            $deferred->resolve($connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null));
         });
+
+        $response = $this->client->request($request, $cancellationToken);
+
+        if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
+            throw new ConnectionException(\sprintf(
+                'A %s (%d) response was not received; instead received response status: %s (%d)',
+                Http\Status::getReason(Http\Status::SWITCHING_PROTOCOLS),
+                Http\Status::SWITCHING_PROTOCOLS,
+                $response->getReason(),
+                $response->getStatus()
+            ), $response);
+        }
+
+        return await($deferred->promise());
     }
 
     /**

@@ -7,8 +7,7 @@ use Amp\Http\Client\Response;
 
 final class ConnectionException extends HttpException
 {
-    /** @var Response */
-    private $response;
+    private Response $response;
 
     public function __construct(string $message, Response $response, ?\Throwable $previous = null)
     {

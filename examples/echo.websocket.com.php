@@ -2,35 +2,30 @@
 
 require \dirname(__DIR__) . '/vendor/autoload.php';
 
-use Amp\Delayed;
-use Amp\Websocket\Client\Connection;
-use Amp\Websocket\Message;
+use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
-Amp\Loop::run(function () {
-    /** @var Connection $connection */
-    $connection = yield connect('wss://echo.websocket.org');
-    yield $connection->send('Hello!');
+$connection = connect('wss://echo.websocket.org');
 
-    $i = 0;
+$connection->send('Hello!');
 
-    /** @var Message $message */
-    while ($message = yield $connection->receive()) {
-        $payload = yield $message->buffer();
+$i = 0;
 
-        \printf("Received: %s\n", $payload);
+while ($message = $connection->receive()) {
+    $payload = $message->buffer();
 
-        if ($payload === 'Goodbye!') {
-            yield $connection->close();
-            break;
-        }
+    \printf("Received: %s\n", $payload);
 
-        yield new Delayed(1000);
-
-        if ($i < 3) {
-            yield $connection->send('Ping: ' . ++$i);
-        } else {
-            yield $connection->send('Goodbye!');
-        }
+    if ($payload === 'Goodbye!') {
+        $connection->close();
+        break;
     }
-});
+
+    delay(1000);
+
+    if ($i < 3) {
+        $connection->send('Ping: ' . ++$i);
+    } else {
+        $connection->send('Goodbye!');
+    }
+}

@@ -7,7 +7,6 @@ use Amp\Http\Client\Connection\DefaultConnectionFactory;
 use Amp\Http\Client\Connection\UnlimitedConnectionPool;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\HttpException;
-use Amp\Promise;
 use Amp\Socket\ConnectContext;
 use Psr\Http\Message\UriInterface as PsrUri;
 
@@ -16,16 +15,16 @@ use Psr\Http\Message\UriInterface as PsrUri;
  * @param ConnectContext|null     $connectContext
  * @param CancellationToken|null  $cancellationToken
  *
- * @return Promise<Connection>
+ * @return Connection
  *
  * @throws ConnectionException If the response received is invalid or is not a switching protocols (101) response.
  * @throws HttpException Thrown if the request fails.
  */
 function connect(
-    $handshake,
+    Handshake|PsrUri|string $handshake,
     ?ConnectContext $connectContext = null,
     ?CancellationToken $cancellationToken = null
-): Promise {
+): Connection {
     if (!$handshake instanceof Handshake) {
         $handshake = new Handshake($handshake);
     }

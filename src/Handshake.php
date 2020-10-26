@@ -10,20 +10,15 @@ use Psr\Http\Message\UriInterface as PsrUri;
 
 final class Handshake extends Message
 {
-    /** @var PsrUri */
-    private $uri;
+    private PsrUri $uri;
 
-    /** @var Options */
-    private $options;
+    private Options $options;
 
-    /** @var int */
-    private $tcpConnectTimeout = 10000;
+    private int $tcpConnectTimeout = 10000;
 
-    /** @var int */
-    private $tlsHandshakeTimeout = 10000;
+    private int $tlsHandshakeTimeout = 10000;
 
-    /** @var int */
-    private $headerSizeLimit = Request::DEFAULT_HEADER_SIZE_LIMIT;
+    private int $headerSizeLimit = Request::DEFAULT_HEADER_SIZE_LIMIT;
 
     /**
      * @param string|PsrUri       $uri target address of websocket (e.g. ws://foo.bar/bar or a
@@ -33,7 +28,7 @@ final class Handshake extends Message
      *
      * @throws \TypeError If $uri is not a string or an instance of PsrUri.
      */
-    public function __construct($uri, ?Options $options = null, array $headers = [])
+    public function __construct(PsrUri|string $uri, ?Options $options = null, array $headers = [])
     {
         $this->uri = $this->makeUri($uri);
         $this->options = $this->checkOptions($options);
@@ -53,7 +48,7 @@ final class Handshake extends Message
      *
      * @return self Cloned object
      */
-    public function withUri($uri): self
+    public function withUri(PsrUri|string $uri): self
     {
         $clone = clone $this;
         $clone->uri = $clone->makeUri($uri);
@@ -217,7 +212,7 @@ final class Handshake extends Message
      *
      * @return PsrUri
      */
-    private function makeUri($uri): PsrUri
+    private function makeUri(PsrUri|string $uri): PsrUri
     {
         if (\is_string($uri)) {
             try {
@@ -225,14 +220,6 @@ final class Handshake extends Message
             } catch (\Exception $exception) {
                 throw new \Error('Invalid Websocket URI provided', 0, $exception);
             }
-        }
-
-        /** @psalm-suppress DocblockTypeContradiction */
-        if (!$uri instanceof PsrUri) {
-            throw new \TypeError(\sprintf(
-                'Must provide an instance of %s or a websocket URI as a string',
-                PsrUri::class
-            ));
         }
 
         switch ($uri->getScheme()) {

@@ -2,41 +2,37 @@
 
 require \dirname(__DIR__) . '/vendor/autoload.php';
 
-use Amp\Delayed;
-use Amp\Websocket\Client\Connection;
 use Amp\Websocket\Client\Handshake;
 use Amp\Websocket\Message;
+use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
 // Connects to the websocket endpoint in examples/broadcast-server/server.php provided in
 // amphp/websocket-server (https://github.com/amphp/websocket-server).
-Amp\Loop::run(function () {
-    $handshake = (new Handshake('ws://localhost:1337/broadcast'))
-        ->withHeader('Origin', 'http://localhost:1337');
+$handshake = (new Handshake('ws://localhost:1337/broadcast'))
+    ->withHeader('Origin', 'http://localhost:1337');
 
-    /** @var Connection $connection */
-    $connection = yield connect($handshake);
-    yield $connection->send('Hello!');
+$connection = connect($handshake);
 
-    $i = 0;
+$connection->send('Hello!');
 
-    /** @var Message $message */
-    while ($message = yield $connection->receive()) {
-        $payload = yield $message->buffer();
+$i = 0;
 
-        \printf("Received: %s\n", $payload);
+while ($message = $connection->receive()) {
+    $payload = $message->buffer();
 
-        if (\strpos($payload, 'Goodbye!') !== false) {
-            yield $connection->close();
-            break;
-        }
+    \printf("Received: %s\n", $payload);
 
-        yield new Delayed(1000);
-
-        if ($i < 3) {
-            yield $connection->send('Ping: ' . ++$i);
-        } else {
-            yield $connection->send('Goodbye!');
-        }
+    if (\strpos($payload, 'Goodbye!') !== false) {
+        $connection->close();
+        break;
     }
-});
+
+    delay(1000);
+
+    if ($i < 3) {
+        $connection->send('Ping: ' . ++$i);
+    } else {
+        $connection->send('Goodbye!');
+    }
+}
