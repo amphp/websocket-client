@@ -3,8 +3,8 @@
 namespace Amp\Websocket\Client;
 
 use Amp\ByteStream\InputStream;
+use Amp\Future;
 use Amp\Http\Client\Response;
-use Amp\Promise;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
 use Amp\Websocket\ClientMetadata;
@@ -85,22 +85,22 @@ final class Rfc6455Connection implements Connection
         return $this->client->getCloseReason();
     }
 
-    public function send(string $data): Promise
+    public function send(string $data): Future
     {
         return $this->client->send($data);
     }
 
-    public function sendBinary(string $data): Promise
+    public function sendBinary(string $data): Future
     {
         return $this->client->sendBinary($data);
     }
 
-    public function stream(InputStream $stream): Promise
+    public function stream(InputStream $stream): Future
     {
         return $this->client->stream($stream);
     }
 
-    public function streamBinary(InputStream $stream): Promise
+    public function streamBinary(InputStream $stream): Future
     {
         return $this->client->streamBinary($stream);
     }

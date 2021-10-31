@@ -13,7 +13,6 @@ use Amp\Socket\EncryptableSocket;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc7692CompressionFactory;
-use function Amp\await;
 
 final class Rfc6455Connector implements Connector
 {
@@ -50,17 +49,17 @@ final class Rfc6455Connector implements Connector
         $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
             $connectionFactory, $compressionFactory, $deferred, $key, $options
         ): void {
-            if (\strtolower((string) $response->getHeader('upgrade')) !== 'websocket') {
-                $deferred->fail(new ConnectionException('Upgrade header does not equal "websocket"', $response));
+            if (\strtolower($response->getHeader('upgrade') ?? '') !== 'websocket') {
+                $deferred->error(new ConnectionException('Upgrade header does not equal "websocket"', $response));
                 return;
             }
 
-            if (!Websocket\validateAcceptForKey((string) $response->getHeader('sec-websocket-accept'), $key)) {
-                $deferred->fail(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
+            if (!Websocket\validateAcceptForKey($response->getHeader('sec-websocket-accept') ?? '', $key)) {
+                $deferred->error(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
                 return;
             }
 
-            $extensions = self::splitField($response, 'sec-websocket-extensions');
+            $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions'), 0, 0);
 
             foreach ($extensions as $extension) {
                 if ($compressionContext = $compressionFactory->fromServerHeader($extension)) {
@@ -68,7 +67,9 @@ final class Rfc6455Connector implements Connector
                 }
             }
 
-            $deferred->resolve($connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null));
+            $deferred->complete(
+                $connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null)
+            );
         });
 
         $response = $this->client->request($request, $cancellationToken);
@@ -83,7 +84,7 @@ final class Rfc6455Connector implements Connector
             ), $response);
         }
 
-        return await($deferred->promise());
+        return $deferred->getFuture()->await();
     }
 
     /**
@@ -112,7 +113,7 @@ final class Rfc6455Connector implements Connector
             $request->setHeader('origin', (string) $origin);
         }
 
-        $extensions = self::splitField($request, 'sec-websocket-extensions');
+        $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions'), 0, 0);
 
         if ($handshake->getOptions()->isCompressionEnabled() && \extension_loaded('zlib')) {
             $extensions[] = $this->compressionFactory->createRequestHeader();

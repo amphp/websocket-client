@@ -15,8 +15,7 @@ use Amp\Websocket\Server\ClientHandler;
 use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
-use function Amp\async;
-use function Amp\await;
+use function Amp\coroutine;
 use function Amp\Websocket\Client\connect;
 
 class ConnectionTest extends AsyncTestCase
@@ -35,7 +34,9 @@ class ConnectionTest extends AsyncTestCase
 
         $port = $socket->getAddress()->getPort();
 
-        $server = new HttpServer([$socket], new Websocket($clientHandler), new NullLogger);
+        $options = Options::createServerDefault()->withCompression();
+
+        $server = new HttpServer([$socket], new Websocket($clientHandler, $options), new NullLogger);
 
         $server->start();
         return [$server, $port];
@@ -47,7 +48,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
-                    await($client->sendBinary($message->buffer()));
+                    $client->sendBinary($message->buffer())->await();
                 }
             }
         });
@@ -61,10 +62,10 @@ class ConnectionTest extends AsyncTestCase
             $this->assertTrue($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $promise = async(fn() => $client->receive());
+            $future = coroutine(fn() => $client->receive());
             $client->close();
 
-            $this->assertNull(await($promise));
+            $this->assertNull($future->await());
         } finally {
             $server->stop();
         }
@@ -76,7 +77,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
-                    await($client->send($message->buffer()));
+                    $client->send($message->buffer())->await();
                 }
             }
         });
@@ -90,10 +91,10 @@ class ConnectionTest extends AsyncTestCase
             $this->assertFalse($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $promise = async(fn() => $client->receive());
+            $future = coroutine(fn() => $client->receive());
             $client->close();
 
-            $this->assertNull(await($promise));
+            $this->assertNull($future->await());
         } finally {
             $server->stop();
         }
@@ -104,8 +105,8 @@ class ConnectionTest extends AsyncTestCase
         [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
-                await($client->send(\str_repeat('.', 1024 * 1024 * 1)));
-                await($client->send('Message'));
+                $client->send(\str_repeat('.', 1024 * 1024 * 1))->await();
+                $client->send('Message')->await();
             }
         });
 
@@ -121,10 +122,10 @@ class ConnectionTest extends AsyncTestCase
             $this->assertFalse($message->isBinary());
             $this->assertSame('Message', $message->buffer());
 
-            $promise = async(fn() => $client->receive());
+            $future = coroutine(fn() => $client->receive());
             $client->close();
 
-            $this->assertNull(await($promise));
+            $this->assertNull($future->await());
         } finally {
             $server->stop();
         }
@@ -142,7 +143,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
-                await($client->sendBinary($payload));
+                $client->sendBinary($payload)->await();
             }
         });
 
@@ -168,7 +169,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
-                await($client->sendBinary($payload));
+                $client->sendBinary($payload)->await();
             }
         });
 

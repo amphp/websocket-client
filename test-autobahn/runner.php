@@ -5,7 +5,6 @@ use Amp\Websocket\Client;
 use Amp\Websocket\Client\Handshake;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Options;
-use function Amp\await;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -42,9 +41,9 @@ for ($i = 1; $i < $cases; $i++) {
             $content = $message->buffer();
 
             if ($message->isBinary()) {
-                await($connection->sendBinary($content));
+                $connection->sendBinary($content)->await();
             } else {
-                await($connection->send($content));
+                $connection->send($content)->await();
             }
         }
     } catch (ClosedException $e) {

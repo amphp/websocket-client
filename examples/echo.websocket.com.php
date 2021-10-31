@@ -21,7 +21,7 @@ while ($message = $connection->receive()) {
         break;
     }
 
-    delay(1000);
+    delay(1);
 
     if ($i < 3) {
         $connection->send('Ping: ' . ++$i);

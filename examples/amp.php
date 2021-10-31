@@ -3,7 +3,6 @@
 require \dirname(__DIR__) . '/vendor/autoload.php';
 
 use Amp\Websocket\Client\Handshake;
-use Amp\Websocket\Message;
 use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
@@ -28,7 +27,7 @@ while ($message = $connection->receive()) {
         break;
     }
 
-    delay(1000);
+    delay(1);
 
     if ($i < 3) {
         $connection->send('Ping: ' . ++$i);
