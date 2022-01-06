@@ -2,7 +2,7 @@
 
 namespace Amp\Websocket\Client;
 
-use Amp\CancellationToken;
+use Amp\Cancellation;
 use Amp\Http\Client\Connection\DefaultConnectionFactory;
 use Amp\Http\Client\Connection\UnlimitedConnectionPool;
 use Amp\Http\Client\HttpClientBuilder;
@@ -13,7 +13,7 @@ use Psr\Http\Message\UriInterface as PsrUri;
 /**
  * @param string|PsrUri|Handshake $handshake
  * @param ConnectContext|null     $connectContext
- * @param CancellationToken|null  $cancellationToken
+ * @param Cancellation|null  $cancellationToken
  *
  * @return Connection
  *
@@ -23,7 +23,7 @@ use Psr\Http\Message\UriInterface as PsrUri;
 function connect(
     Handshake|PsrUri|string $handshake,
     ?ConnectContext $connectContext = null,
-    ?CancellationToken $cancellationToken = null
+    ?Cancellation $cancellationToken = null
 ): Connection {
     if (!$handshake instanceof Handshake) {
         $handshake = new Handshake($handshake);

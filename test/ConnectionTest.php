@@ -6,7 +6,6 @@ use Amp\Http\Server\HttpServer;
 use Amp\Http\Server\Request;
 use Amp\Http\Server\Response;
 use Amp\PHPUnit\AsyncTestCase;
-use Amp\Socket\Server as SocketServer;
 use Amp\Socket\SocketException;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
@@ -15,7 +14,8 @@ use Amp\Websocket\Server\ClientHandler;
 use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
-use function Amp\coroutine;
+use function Amp\async;
+use function Amp\Socket\listen;
 use function Amp\Websocket\Client\connect;
 
 class ConnectionTest extends AsyncTestCase
@@ -30,7 +30,7 @@ class ConnectionTest extends AsyncTestCase
      */
     protected function createServer(ClientHandler $clientHandler): array
     {
-        $socket = SocketServer::listen('tcp://localhost:0');
+        $socket = listen('tcp://localhost:0');
 
         $port = $socket->getAddress()->getPort();
 
@@ -62,7 +62,7 @@ class ConnectionTest extends AsyncTestCase
             $this->assertTrue($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $future = coroutine(fn() => $client->receive());
+            $future = async(fn() => $client->receive());
             $client->close();
 
             $this->assertNull($future->await());
@@ -91,7 +91,7 @@ class ConnectionTest extends AsyncTestCase
             $this->assertFalse($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $future = coroutine(fn() => $client->receive());
+            $future = async(fn() => $client->receive());
             $client->close();
 
             $this->assertNull($future->await());
@@ -105,8 +105,8 @@ class ConnectionTest extends AsyncTestCase
         [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
-                $client->send(\str_repeat('.', 1024 * 1024 * 1))->await();
-                $client->send('Message')->await();
+                $client->send(\str_repeat('.', 1024 * 1024 * 1));
+                $client->send('Message');
             }
         });
 
@@ -122,7 +122,7 @@ class ConnectionTest extends AsyncTestCase
             $this->assertFalse($message->isBinary());
             $this->assertSame('Message', $message->buffer());
 
-            $future = coroutine(fn() => $client->receive());
+            $future = async(fn() => $client->receive());
             $client->close();
 
             $this->assertNull($future->await());

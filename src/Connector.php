@@ -2,19 +2,19 @@
 
 namespace Amp\Websocket\Client;
 
-use Amp\CancellationToken;
+use Amp\Cancellation;
 use Amp\Http\Client\HttpException;
 
 interface Connector
 {
     /**
      * @param Handshake $handshake
-     * @param CancellationToken|null $cancellationToken
+     * @param Cancellation|null $cancellation
      *
      * @return Connection
      *
      * @throws HttpException Thrown if the request fails.
      * @throws ConnectionException If the response received is invalid or is not a switching protocols (101) response.
      */
-    public function connect(Handshake $handshake, ?CancellationToken $cancellationToken = null): Connection;
+    public function connect(Handshake $handshake, ?Cancellation $cancellation = null): Connection;
 }

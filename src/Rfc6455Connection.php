@@ -2,7 +2,7 @@
 
 namespace Amp\Websocket\Client;
 
-use Amp\ByteStream\InputStream;
+use Amp\ByteStream\ReadableStream;
 use Amp\Future;
 use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
@@ -85,22 +85,22 @@ final class Rfc6455Connection implements Connection
         return $this->client->getCloseReason();
     }
 
-    public function send(string $data): Future
+    public function send(string $data): void
     {
-        return $this->client->send($data);
+        $this->client->send($data);
     }
 
-    public function sendBinary(string $data): Future
+    public function sendBinary(string $data): void
     {
-        return $this->client->sendBinary($data);
+        $this->client->sendBinary($data);
     }
 
-    public function stream(InputStream $stream): Future
+    public function stream(ReadableStream $stream): Future
     {
         return $this->client->stream($stream);
     }
 
-    public function streamBinary(InputStream $stream): Future
+    public function streamBinary(ReadableStream $stream): Future
     {
         return $this->client->streamBinary($stream);
     }
