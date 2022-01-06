@@ -2,8 +2,8 @@
 
 namespace Amp\Websocket\Client;
 
-use Amp\CancellationToken;
-use Amp\Deferred;
+use Amp\Cancellation;
+use Amp\DeferredFuture;
 use Amp\Http;
 use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\Request;
@@ -37,13 +37,13 @@ final class Rfc6455Connector implements Connector
         $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
     }
 
-    public function connect(Handshake $handshake, ?CancellationToken $cancellationToken = null): Connection
+    public function connect(Handshake $handshake, ?Cancellation $cancellationToken = null): Connection
     {
         $key = Websocket\generateKey();
         $request = $this->generateRequest($handshake, $key);
         $options = $handshake->getOptions();
 
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture();
         $connectionFactory = $this->connectionFactory;
         $compressionFactory = $this->compressionFactory;
         $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
