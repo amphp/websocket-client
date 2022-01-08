@@ -9,12 +9,12 @@ interface Connector
 {
     /**
      * @param Handshake $handshake
-     * @param Cancellation|null $cancellationToken
+     * @param Cancellation|null $cancellation
      *
      * @return Connection
      *
      * @throws HttpException Thrown if the request fails.
      * @throws ConnectionException If the response received is invalid or is not a switching protocols (101) response.
      */
-    public function connect(Handshake $handshake, ?Cancellation $cancellationToken = null): Connection;
+    public function connect(Handshake $handshake, ?Cancellation $cancellation = null): Connection;
 }

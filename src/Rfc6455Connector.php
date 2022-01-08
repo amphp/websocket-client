@@ -37,7 +37,7 @@ final class Rfc6455Connector implements Connector
         $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
     }
 
-    public function connect(Handshake $handshake, ?Cancellation $cancellationToken = null): Connection
+    public function connect(Handshake $handshake, ?Cancellation $cancellation = null): Connection
     {
         $key = Websocket\generateKey();
         $request = $this->generateRequest($handshake, $key);
@@ -72,7 +72,7 @@ final class Rfc6455Connector implements Connector
             );
         });
 
-        $response = $this->client->request($request, $cancellationToken);
+        $response = $this->client->request($request, $cancellation);
 
         if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
             throw new ConnectionException(\sprintf(
