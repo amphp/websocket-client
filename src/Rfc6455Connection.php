@@ -3,7 +3,7 @@
 namespace Amp\Websocket\Client;
 
 use Amp\ByteStream\ReadableStream;
-use Amp\Future;
+use Amp\Cancellation;
 use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
@@ -30,9 +30,9 @@ final class Rfc6455Connection implements Connection
         return $this->response;
     }
 
-    public function receive(): ?Message
+    public function receive(?Cancellation $cancellation = null): ?Message
     {
-        return $this->client->receive();
+        return $this->client->receive($cancellation);
     }
 
     public function getId(): int
@@ -95,14 +95,14 @@ final class Rfc6455Connection implements Connection
         $this->client->sendBinary($data);
     }
 
-    public function stream(ReadableStream $stream): Future
+    public function stream(ReadableStream $stream): void
     {
-        return $this->client->stream($stream);
+        $this->client->stream($stream);
     }
 
-    public function streamBinary(ReadableStream $stream): Future
+    public function streamBinary(ReadableStream $stream): void
     {
-        return $this->client->streamBinary($stream);
+        $this->client->streamBinary($stream);
     }
 
     public function ping(): void
@@ -120,8 +120,8 @@ final class Rfc6455Connection implements Connection
         return $this->client->close($code, $reason);
     }
 
-    public function onClose(callable $onClose): void
+    public function onClose(\Closure $closure): void
     {
-        $this->client->onClose($onClose);
+        $this->client->onClose($closure);
     }
 }

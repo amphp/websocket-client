@@ -48,7 +48,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
-                    $client->sendBinary($message->buffer())->await();
+                    $client->sendBinary($message->buffer());
                 }
             }
         });
@@ -77,7 +77,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
-                    $client->send($message->buffer())->await();
+                    $client->send($message->buffer());
                 }
             }
         });
@@ -105,7 +105,7 @@ class ConnectionTest extends AsyncTestCase
         [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
-                $client->send(\str_repeat('.', 1024 * 1024 * 1));
+                $client->send(\str_repeat('.', 1024 * 1024));
                 $client->send('Message');
             }
         });
@@ -143,7 +143,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
-                $client->sendBinary($payload)->await();
+                $client->sendBinary($payload);
             }
         });
 
@@ -169,7 +169,7 @@ class ConnectionTest extends AsyncTestCase
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
-                $client->sendBinary($payload)->await();
+                $client->sendBinary($payload);
             }
         });
 
