@@ -105,14 +105,6 @@ final class Rfc6455Connector implements Connector
         $request->setTlsHandshakeTimeout($handshake->getTlsHandshakeTimeout());
         $request->setHeaderSizeLimit($handshake->getHeaderSizeLimit());
 
-        if (!$request->hasHeader('origin')) {
-            $origin = $uri
-                ->withUserInfo('')
-                ->withPath('')
-                ->withQuery('');
-            $request->setHeader('origin', (string) $origin);
-        }
-
         $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions'), 0, 0);
 
         if ($handshake->getOptions()->isCompressionEnabled() && \extension_loaded('zlib')) {
