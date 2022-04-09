@@ -5,10 +5,13 @@ namespace Amp\Websocket\Client;
 use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\Http;
+use Amp\Http\Client\Connection\DefaultConnectionFactory;
+use Amp\Http\Client\Connection\UnlimitedConnectionPool;
 use Amp\Http\Client\HttpClient;
+use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
-use Amp\Http\Message;
+use Amp\Socket\ConnectContext;
 use Amp\Socket\EncryptableSocket;
 use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
@@ -16,38 +19,42 @@ use Amp\Websocket\Rfc7692CompressionFactory;
 
 final class Rfc6455Connector implements Connector
 {
-    private HttpClient $client;
-
-    private ConnectionFactory $connectionFactory;
-
-    private CompressionContextFactory $compressionFactory;
+    private readonly HttpClient $httpClient;
 
     /**
-     * @param HttpClient                     $client
-     * @param ConnectionFactory|null         $connectionFactory  Uses {@see Rfc6455ConnectionFactory} if null.
-     * @param CompressionContextFactory|null $compressionFactory Uses {@see Rfc7692CompressionFactory} if null.
+     * @param CompressionContextFactory|null $compressionFactory Use null to disable compression.
      */
     public function __construct(
-        HttpClient $client,
-        ?ConnectionFactory $connectionFactory = null,
-        ?CompressionContextFactory $compressionFactory = null
+        private readonly ConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
+        HttpClient $httpClient = null,
+        private readonly ?CompressionContextFactory $compressionFactory = new Rfc7692CompressionFactory(),
     ) {
-        $this->client = $client;
-        $this->connectionFactory = $connectionFactory ?? new Rfc6455ConnectionFactory;
-        $this->compressionFactory = $compressionFactory ?? new Rfc7692CompressionFactory;
+        $this->httpClient = $httpClient
+            ?? (new HttpClientBuilder)
+                ->usingPool(new UnlimitedConnectionPool(
+                    new DefaultConnectionFactory(connectContext: (new ConnectContext)->withTcpNoDelay()))
+                )
+                ->build();
     }
 
     public function connect(Handshake $handshake, ?Cancellation $cancellation = null): Connection
     {
         $key = Websocket\generateKey();
         $request = $this->generateRequest($handshake, $key);
-        $options = $handshake->getOptions();
 
         $deferred = new DeferredFuture();
         $connectionFactory = $this->connectionFactory;
         $compressionFactory = $this->compressionFactory;
-        $request->setUpgradeHandler(static function (EncryptableSocket $socket, Request $request, Response $response) use (
-            $connectionFactory, $compressionFactory, $deferred, $key, $options
+
+        $request->setUpgradeHandler(static function (
+            EncryptableSocket $socket,
+            Request $request,
+            Response $response,
+        ) use (
+            $connectionFactory,
+            $compressionFactory,
+            $deferred,
+            $key,
         ): void {
             if (\strtolower($response->getHeader('upgrade') ?? '') !== 'websocket') {
                 $deferred->error(new ConnectionException('Upgrade header does not equal "websocket"', $response));
@@ -62,17 +69,17 @@ final class Rfc6455Connector implements Connector
             $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions'), 0, 0);
 
             foreach ($extensions as $extension) {
-                if ($compressionContext = $compressionFactory->fromServerHeader($extension)) {
+                if ($compressionContext = $compressionFactory?->fromServerHeader($extension)) {
                     break;
                 }
             }
 
             $deferred->complete(
-                $connectionFactory->createConnection($response, $socket, $options, $compressionContext ?? null)
+                $connectionFactory->createConnection($response, $socket, $compressionContext ?? null)
             );
         });
 
-        $response = $this->client->request($request, $cancellation);
+        $response = $this->httpClient->request($request, $cancellation);
 
         if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
             throw new ConnectionException(\sprintf(
@@ -89,7 +96,7 @@ final class Rfc6455Connector implements Connector
 
     /**
      * @param Handshake $handshake
-     * @param string    $key
+     * @param string $key
      *
      * @return Request
      */
@@ -107,7 +114,7 @@ final class Rfc6455Connector implements Connector
 
         $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions'), 0, 0);
 
-        if ($handshake->getOptions()->isCompressionEnabled() && \extension_loaded('zlib')) {
+        if ($this->compressionFactory && \extension_loaded('zlib')) {
             $extensions[] = $this->compressionFactory->createRequestHeader();
         }
 
@@ -122,25 +129,5 @@ final class Rfc6455Connector implements Connector
         $request->setHeader('sec-websocket-key', $key);
 
         return $request;
-    }
-
-    private static function splitField(Message $message, string $headerName): array
-    {
-        $header = \implode(', ', $message->getHeaderArray($headerName));
-
-        if ($header === '') {
-            return [];
-        }
-
-        \preg_match_all('(([^",]+(?:"((?:[^\\\\"]|\\\\.)*)"|([^,]*))?),?\s*)', $header, $matches, \PREG_SET_ORDER);
-
-        $values = [];
-
-        foreach ($matches as $match) {
-            // decode escaped characters
-            $values[] = \preg_replace('(\\\\(.))', '\1', \trim($match[1]));
-        }
-
-        return $values;
     }
 }

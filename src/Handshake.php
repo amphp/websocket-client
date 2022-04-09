@@ -4,7 +4,6 @@ namespace Amp\Websocket\Client;
 
 use Amp\Http\Client\Request;
 use Amp\Http\Message;
-use Amp\Websocket\Options;
 use League\Uri;
 use Psr\Http\Message\UriInterface as PsrUri;
 
@@ -12,26 +11,22 @@ final class Handshake extends Message
 {
     private PsrUri $uri;
 
-    private Options $options;
+    private float $tcpConnectTimeout = 10;
 
-    private int $tcpConnectTimeout = 10000;
-
-    private int $tlsHandshakeTimeout = 10000;
+    private float $tlsHandshakeTimeout = 10;
 
     private int $headerSizeLimit = Request::DEFAULT_HEADER_SIZE_LIMIT;
 
     /**
-     * @param string|PsrUri       $uri target address of websocket (e.g. ws://foo.bar/bar or a
-     *                                 wss://crypto.example/?secureConnection) or a PsrUri instance.
-     * @param Options|null        $options
+     * @param string|PsrUri $uri target address of websocket (e.g. ws://foo.bar/bar or
+     * wss://crypto.example/?secureConnection) or a PsrUri instance.
      * @param string[]|string[][] $headers
      *
      * @throws \TypeError If $uri is not a string or an instance of PsrUri.
      */
-    public function __construct(PsrUri|string $uri, ?Options $options = null, array $headers = [])
+    public function __construct(PsrUri|string $uri, array $headers = [])
     {
         $this->uri = $this->makeUri($uri);
-        $this->options = $this->checkOptions($options);
         $this->setHeaders($headers);
     }
 
@@ -57,35 +52,14 @@ final class Handshake extends Message
     }
 
     /**
-     * @return Options
+     * @return float Timeout in seconds for the TCP connection.
      */
-    public function getOptions(): Options
-    {
-        return $this->options;
-    }
-
-    /**
-     * @param Options $options
-     *
-     * @return self Cloned object.
-     */
-    public function withOptions(Options $options): self
-    {
-        $clone = clone $this;
-        $clone->options = $clone->checkOptions($options);
-
-        return $clone;
-    }
-
-    /**
-     * @return int Timeout in milliseconds for the TCP connection.
-     */
-    public function getTcpConnectTimeout(): int
+    public function getTcpConnectTimeout(): float
     {
         return $this->tcpConnectTimeout;
     }
 
-    public function withTcpConnectTimeout(int $tcpConnectTimeout): self
+    public function withTcpConnectTimeout(float $tcpConnectTimeout): self
     {
         $clone = clone $this;
         $clone->tcpConnectTimeout = $tcpConnectTimeout;
@@ -94,14 +68,14 @@ final class Handshake extends Message
     }
 
     /**
-     * @return int Timeout in milliseconds for the TLS handshake.
+     * @return float Timeout in seconds for the TLS handshake.
      */
-    public function getTlsHandshakeTimeout(): int
+    public function getTlsHandshakeTimeout(): float
     {
         return $this->tlsHandshakeTimeout;
     }
 
-    public function withTlsHandshakeTimeout(int $tlsHandshakeTimeout): self
+    public function withTlsHandshakeTimeout(float $tlsHandshakeTimeout): self
     {
         $clone = clone $this;
         $clone->tlsHandshakeTimeout = $tlsHandshakeTimeout;
@@ -145,7 +119,7 @@ final class Handshake extends Message
     /**
      * Replaces the given header in the returned instance.
      *
-     * @param string          $name
+     * @param string $name
      * @param string|string[] $value
      *
      * @return self Cloned object.
@@ -161,7 +135,7 @@ final class Handshake extends Message
     /**
      * Adds the given header in the returned instance.
      *
-     * @param string          $name
+     * @param string $name
      * @param string|string[] $value
      *
      * @return self Cloned object.
@@ -232,14 +206,5 @@ final class Handshake extends Message
         }
 
         return $uri;
-    }
-
-    private function checkOptions(?Options $options): Options
-    {
-        if ($options === null) {
-            return Options::createClientDefault();
-        }
-
-        return $options;
     }
 }

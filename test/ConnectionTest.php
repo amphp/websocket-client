@@ -2,20 +2,25 @@
 
 namespace Amp\Websocket\Client\Test;
 
+use Amp\Http\Server\DefaultErrorHandler;
 use Amp\Http\Server\HttpServer;
 use Amp\Http\Server\Request;
 use Amp\Http\Server\Response;
+use Amp\Http\Server\SocketHttpServer;
 use Amp\PHPUnit\AsyncTestCase;
+use Amp\Socket\InternetAddress;
+use Amp\Socket\SocketAddress;
 use Amp\Socket\SocketException;
+use Amp\TimeoutCancellation;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
-use Amp\Websocket\Options;
 use Amp\Websocket\Server\ClientHandler;
+use Amp\Websocket\Server\EmptyHandshakeHandler;
 use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
 use Psr\Log\NullLogger;
 use function Amp\async;
-use function Amp\Socket\listen;
+use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
 class ConnectionTest extends AsyncTestCase
@@ -25,26 +30,28 @@ class ConnectionTest extends AsyncTestCase
      *
      * @param ClientHandler $clientHandler
      *
-     * @return array Returns the HttpServer instance and the used port number.
+     * @return array{HttpServer, SocketAddress} Returns the HttpServer instance and the used port number.
      * @throws SocketException
      */
     protected function createServer(ClientHandler $clientHandler): array
     {
-        $socket = listen('tcp://localhost:0');
+        $logger = new NullLogger;
 
-        $port = $socket->getAddress()->getPort();
+        $httpServer = new SocketHttpServer($logger);
+        $httpServer->expose(new InternetAddress('127.0.0.1', 0));
+        $httpServer->start(
+            new Websocket($logger, new EmptyHandshakeHandler(), $clientHandler),
+            new DefaultErrorHandler(),
+        );
 
-        $options = Options::createServerDefault()->withCompression();
+        $server = $httpServer->getServers()[0] ?? self::fail('HTTP server failed to create server sockets');
 
-        $server = new HttpServer([$socket], new Websocket($clientHandler, $options), new NullLogger);
-
-        $server->start();
-        return [$server, $port];
+        return [$httpServer, $server->getAddress()];
     }
 
     public function testSimpleBinaryEcho(): void
     {
-        [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
+        [$server, $address] = $this->createServer(new class implements ClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
@@ -54,7 +61,7 @@ class ConnectionTest extends AsyncTestCase
         });
 
         try {
-            $client = connect('ws://localhost:' . $port . '/');
+            $client = connect('ws://' . $address->toString());
             $client->sendBinary('Hey!');
 
             $message = $client->receive();
@@ -62,7 +69,7 @@ class ConnectionTest extends AsyncTestCase
             $this->assertTrue($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $future = async(fn() => $client->receive());
+            $future = async($client->receive(...), new TimeoutCancellation(1));
             $client->close();
 
             $this->assertNull($future->await());
@@ -73,7 +80,7 @@ class ConnectionTest extends AsyncTestCase
 
     public function testSimpleTextEcho(): void
     {
-        [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
+        [$server, $address] = $this->createServer(new class implements ClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
@@ -83,7 +90,7 @@ class ConnectionTest extends AsyncTestCase
         });
 
         try {
-            $client = connect('ws://localhost:' . $port . '/');
+            $client = connect('ws://' . $address->toString());
             $client->send('Hey!');
 
             $message = $client->receive();
@@ -91,7 +98,7 @@ class ConnectionTest extends AsyncTestCase
             $this->assertFalse($message->isBinary());
             $this->assertSame('Hey!', $message->buffer());
 
-            $future = async(fn() => $client->receive());
+            $future = async($client->receive(...), new TimeoutCancellation(1));
             $client->close();
 
             $this->assertNull($future->await());
@@ -102,27 +109,30 @@ class ConnectionTest extends AsyncTestCase
 
     public function testUnconsumedMessage(): void
     {
-        [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
+        [$server, $address] = $this->createServer(new class implements ClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $client->send(\str_repeat('.', 1024 * 1024));
                 $client->send('Message');
+                $client->close();
             }
         });
 
         try {
-            $client = connect('ws://localhost:' . $port . '/');
+            $client = connect('ws://' . $address->toString());
 
-            $message = $client->receive();
+            $message = $client->receive(new TimeoutCancellation(1));
 
             // Do not consume the bytes from the first message.
             unset($message);
 
-            $message = $client->receive();
+            delay(0);
+
+            $message = $client->receive(new TimeoutCancellation(1));
             $this->assertFalse($message->isBinary());
             $this->assertSame('Message', $message->buffer());
 
-            $future = async(fn() => $client->receive());
+            $future = async($client->receive(...), new TimeoutCancellation(1));
             $client->close();
 
             $this->assertNull($future->await());
@@ -133,13 +143,7 @@ class ConnectionTest extends AsyncTestCase
 
     public function testVeryLongMessage(): void
     {
-        $options = Options::createClientDefault()
-            ->withBytesPerSecondLimit(\PHP_INT_MAX)
-            ->withFramesPerSecondLimit(\PHP_INT_MAX)
-            ->withMessageSizeLimit(1024 * 1024 * 10)
-            ->withoutCompression();
-
-        [$server, $port] = $this->createServer(new class extends Helper\EmptyClientHandler {
+        [$server, $address] = $this->createServer(new class implements ClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
@@ -147,10 +151,14 @@ class ConnectionTest extends AsyncTestCase
             }
         });
 
-        try {
-            $client = connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
+        $connector = new Client\Rfc6455Connector(
+            connectionFactory: new Client\Rfc6455ConnectionFactory(messageSizeLimit: 1024 * 1024 * 10),
+        );
 
-            $message = $client->receive();
+        try {
+            $client = $connector->connect(new Client\Handshake('ws://' . $address->toString()));
+
+            $message = $client->receive(new TimeoutCancellation(1));
             $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), $message->buffer());
         } finally {
             $server->stop();
@@ -159,13 +167,7 @@ class ConnectionTest extends AsyncTestCase
 
     public function testTooLongMessage(): void
     {
-        $options = Options::createClientDefault()
-            ->withBytesPerSecondLimit(\PHP_INT_MAX)
-            ->withFramesPerSecondLimit(\PHP_INT_MAX)
-            ->withMessageSizeLimit(1024 * 1024 * 10)
-            ->withoutCompression();
-
-        [$server, $port] = $this->createServer(new class() extends Helper\EmptyClientHandler {
+        [$server, $address] = $this->createServer(new class() implements ClientHandler {
             public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
@@ -173,11 +175,17 @@ class ConnectionTest extends AsyncTestCase
             }
         });
 
-        try {
-            $client = connect(new Client\Handshake('ws://localhost:' . $port . '/', $options));
+        $connector = new Client\Rfc6455Connector(
+            connectionFactory: new Client\Rfc6455ConnectionFactory(messageSizeLimit: 1024 * 1024 * 10),
+        );
 
-            $message = $client->receive();
+        try {
+            $client = $connector->connect(new Client\Handshake('ws://' . $address->toString()));
+
+            $message = $client->receive(new TimeoutCancellation(1));
             $message->buffer();
+
+            self::fail('Buffering the message should have thrown a ClosedException due to exceeding the message size limit');
         } catch (ClosedException $exception) {
             $this->assertSame('Received payload exceeds maximum allowable size', $exception->getReason());
         } finally {

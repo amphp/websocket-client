@@ -4,20 +4,12 @@ use Amp\ByteStream\StreamException;
 use Amp\Websocket\Client;
 use Amp\Websocket\Client\Handshake;
 use Amp\Websocket\ClosedException;
-use Amp\Websocket\Options;
 
 require __DIR__ . '/../vendor/autoload.php';
 
 const AGENT = 'amphp/websocket';
 
 $errors = 0;
-
-$options = Options::createClientDefault()
-    ->withBytesPerSecondLimit(\PHP_INT_MAX)
-    ->withFrameSizeLimit(\PHP_INT_MAX)
-    ->withFramesPerSecondLimit(\PHP_INT_MAX)
-    ->withMessageSizeLimit(\PHP_INT_MAX)
-    ->withValidateUtf8(true);
 
 $connection = Client\connect('ws://127.0.0.1:9001/getCaseCount');
 $message = $connection->receive();
@@ -33,7 +25,7 @@ for ($i = 1; $i < $cases; $i++) {
     print $info['id'] . ' ' . \str_repeat('-', 80 - \strlen($info['id']) - 1) . PHP_EOL;
     print \wordwrap($info['description'], 80, PHP_EOL) . ' ';
 
-    $handshake = new Handshake('ws://127.0.0.1:9001/runCase?case=' . $i . '&agent=' . AGENT, $options);
+    $handshake = new Handshake('ws://127.0.0.1:9001/runCase?case=' . $i . '&agent=' . AGENT);
     $connection = Client\connect($handshake);
 
     try {
@@ -41,9 +33,9 @@ for ($i = 1; $i < $cases; $i++) {
             $content = $message->buffer();
 
             if ($message->isBinary()) {
-                $connection->sendBinary($content)->await();
+                $connection->sendBinary($content);
             } else {
-                $connection->send($content)->await();
+                $connection->send($content);
             }
         }
     } catch (ClosedException $e) {

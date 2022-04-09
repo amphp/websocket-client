@@ -10,19 +10,14 @@ use Amp\Socket\TlsInfo;
 use Amp\Websocket\ClientMetadata;
 use Amp\Websocket\Code;
 use Amp\Websocket\Message;
-use Amp\Websocket\Options;
 use Amp\Websocket\Rfc6455Client;
 
 final class Rfc6455Connection implements Connection
 {
-    private Rfc6455Client $client;
-
-    private Response $response;
-
-    public function __construct(Rfc6455Client $client, Response $response)
-    {
-        $this->client = $client;
-        $this->response = $response;
+    public function __construct(
+        private readonly Rfc6455Client $client,
+        private readonly Response $response,
+    ) {
     }
 
     public function getResponse(): Response
@@ -38,16 +33,6 @@ final class Rfc6455Connection implements Connection
     public function getId(): int
     {
         return $this->client->getId();
-    }
-
-    public function getOptions(): Options
-    {
-        return $this->client->getOptions();
-    }
-
-    public function isConnected(): bool
-    {
-        return $this->client->isConnected();
     }
 
     public function getLocalAddress(): SocketAddress
@@ -115,13 +100,18 @@ final class Rfc6455Connection implements Connection
         return $this->client->getInfo();
     }
 
-    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): array
+    public function isClosed(): bool
     {
-        return $this->client->close($code, $reason);
+        return $this->client->isClosed();
     }
 
-    public function onClose(\Closure $closure): void
+    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): void
     {
-        $this->client->onClose($closure);
+        $this->client->close($code, $reason);
+    }
+
+    public function onClose(\Closure $onClose): void
+    {
+        $this->client->onClose($onClose);
     }
 }
