@@ -4,24 +4,24 @@ namespace Amp\Websocket\Client;
 
 use Amp\Http\Client\Response;
 use Amp\Socket\Socket;
-use Amp\Websocket\Client;
 use Amp\Websocket\CompressionContext;
 use Amp\Websocket\HeartbeatQueue;
 use Amp\Websocket\RateLimiter;
 use Amp\Websocket\Rfc6455Client;
+use Amp\Websocket\WebsocketClient;
 
 final class Rfc6455ConnectionFactory implements ConnectionFactory
 {
     public function __construct(
         private readonly ?HeartbeatQueue $heartbeatQueue = null,
         private readonly ?RateLimiter $rateLimiter = null,
-        private readonly bool $textOnly = Client::DEFAULT_TEXT_ONLY,
-        private readonly bool $validateUtf8 = Client::DEFAULT_VALIDATE_UTF8,
+        private readonly bool $textOnly = WebsocketClient::DEFAULT_TEXT_ONLY,
+        private readonly bool $validateUtf8 = WebsocketClient::DEFAULT_VALIDATE_UTF8,
         private readonly int $messageSizeLimit = Connection::DEFAULT_MESSAGE_SIZE_LIMIT,
         private readonly int $frameSizeLimit = Connection::DEFAULT_FRAME_SIZE_LIMIT,
-        private readonly int $streamThreshold = Client::DEFAULT_STREAM_THRESHOLD,
-        private readonly int $frameSplitThreshold = Client::DEFAULT_FRAME_SPLIT_THRESHOLD,
-        private readonly float $closePeriod = Client::DEFAULT_CLOSE_PERIOD,
+        private readonly int $streamThreshold = WebsocketClient::DEFAULT_STREAM_THRESHOLD,
+        private readonly int $frameSplitThreshold = WebsocketClient::DEFAULT_FRAME_SPLIT_THRESHOLD,
+        private readonly float $closePeriod = WebsocketClient::DEFAULT_CLOSE_PERIOD,
     ) {
     }
 

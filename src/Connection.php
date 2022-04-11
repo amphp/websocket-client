@@ -3,9 +3,9 @@
 namespace Amp\Websocket\Client;
 
 use Amp\Http\Client\Response;
-use Amp\Websocket\Client;
+use Amp\Websocket\WebsocketClient;
 
-interface Connection extends Client
+interface Connection extends WebsocketClient
 {
     public const DEFAULT_MESSAGE_SIZE_LIMIT = 2 ** 30; // 1GB
     public const DEFAULT_FRAME_SIZE_LIMIT = 2 ** 20 * 100; // 100MB
