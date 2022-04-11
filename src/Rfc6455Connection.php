@@ -12,7 +12,7 @@ use Amp\Websocket\Message;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\WebsocketClientMetadata;
 
-final class Rfc6455Connection implements Connection
+final class Rfc6455Connection implements WebsocketConnection
 {
     public function __construct(
         private readonly Rfc6455Client $client,

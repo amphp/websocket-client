@@ -10,7 +10,7 @@ use Revolt\EventLoop;
 /**
  * Set or access the global websocket Connector instance.
  */
-function connector(?Connector $connector = null): Connector
+function connector(?WebsocketConnector $connector = null): WebsocketConnector
 {
     static $map;
     $map ??= new \WeakMap();
@@ -24,15 +24,15 @@ function connector(?Connector $connector = null): Connector
 }
 
 /**
- * @throws ConnectionException If the response received is invalid or is not a switching protocols (101) response.
+ * @throws WebsocketConnectException If the response received is invalid or is not a switching protocols (101) response.
  * @throws HttpException Thrown if the request fails.
  */
 function connect(
-    Handshake|PsrUri|string $handshake,
+    WebsocketHandshake|PsrUri|string $handshake,
     ?Cancellation $cancellation = null,
-): Connection {
-    if (!$handshake instanceof Handshake) {
-        $handshake = new Handshake($handshake);
+): WebsocketConnection {
+    if (!$handshake instanceof WebsocketHandshake) {
+        $handshake = new WebsocketHandshake($handshake);
     }
 
     return connector()->connect($handshake, $cancellation);

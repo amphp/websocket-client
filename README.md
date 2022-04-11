@@ -23,14 +23,14 @@ composer require amphp/websocket-client
 More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
-use Amp\Websocket\Client\Connection;
+use Amp\Websocket\Client\WebsocketConnection;
 use Amp\Websocket\Message;
 use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
 // Connects to the Kaazing echoing websocket demo.
 Amp\Loop::run(function () {
-    /** @var Connection $connection */
+    /** @var WebsocketConnection $connection */
     $connection = yield connect('ws://demos.kaazing.com/echo');
     yield $connection->send("Hello!");
 

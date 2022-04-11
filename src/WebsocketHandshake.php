@@ -7,7 +7,7 @@ use Amp\Http\Message;
 use League\Uri;
 use Psr\Http\Message\UriInterface as PsrUri;
 
-final class Handshake extends Message
+final class WebsocketHandshake extends Message
 {
     private PsrUri $uri;
 

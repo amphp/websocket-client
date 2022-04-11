@@ -24,7 +24,7 @@ use function Amp\async;
 use function Amp\delay;
 use function Amp\Websocket\Client\connect;
 
-class ConnectionTest extends AsyncTestCase
+class WebsocketConnectionTest extends AsyncTestCase
 {
     /**
      * This method creates a new server that listens on a randomly assigned port and returns the used port.
@@ -157,7 +157,7 @@ class ConnectionTest extends AsyncTestCase
         );
 
         try {
-            $client = $connector->connect(new Client\Handshake('ws://' . $address->toString()));
+            $client = $connector->connect(new Client\WebsocketHandshake('ws://' . $address->toString()));
 
             $message = $client->receive(new TimeoutCancellation(1));
             $this->assertSame(\str_repeat('.', 1024 * 1024 * 10), $message->buffer());
@@ -181,7 +181,7 @@ class ConnectionTest extends AsyncTestCase
         );
 
         try {
-            $client = $connector->connect(new Client\Handshake('ws://' . $address->toString()));
+            $client = $connector->connect(new Client\WebsocketHandshake('ws://' . $address->toString()));
 
             $message = $client->receive(new TimeoutCancellation(1));
             $message->buffer();

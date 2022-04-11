@@ -17,7 +17,7 @@ use Amp\Websocket;
 use Amp\Websocket\CompressionContextFactory;
 use Amp\Websocket\Rfc7692CompressionFactory;
 
-final class Rfc6455Connector implements Connector
+final class Rfc6455Connector implements WebsocketConnector
 {
     private readonly HttpClient $httpClient;
 
@@ -25,7 +25,7 @@ final class Rfc6455Connector implements Connector
      * @param CompressionContextFactory|null $compressionFactory Use null to disable compression.
      */
     public function __construct(
-        private readonly ConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
+        private readonly WebsocketConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
         HttpClient $httpClient = null,
         private readonly ?CompressionContextFactory $compressionFactory = new Rfc7692CompressionFactory(),
     ) {
@@ -37,7 +37,7 @@ final class Rfc6455Connector implements Connector
                 ->build();
     }
 
-    public function connect(Handshake $handshake, ?Cancellation $cancellation = null): Connection
+    public function connect(WebsocketHandshake $handshake, ?Cancellation $cancellation = null): WebsocketConnection
     {
         $key = Websocket\generateKey();
         $request = $this->generateRequest($handshake, $key);
@@ -57,12 +57,12 @@ final class Rfc6455Connector implements Connector
             $key,
         ): void {
             if (\strtolower($response->getHeader('upgrade') ?? '') !== 'websocket') {
-                $deferred->error(new ConnectionException('Upgrade header does not equal "websocket"', $response));
+                $deferred->error(new WebsocketConnectException('Upgrade header does not equal "websocket"', $response));
                 return;
             }
 
             if (!Websocket\validateAcceptForKey($response->getHeader('sec-websocket-accept') ?? '', $key)) {
-                $deferred->error(new ConnectionException('Invalid Sec-WebSocket-Accept header', $response));
+                $deferred->error(new WebsocketConnectException('Invalid Sec-WebSocket-Accept header', $response));
                 return;
             }
 
@@ -82,7 +82,7 @@ final class Rfc6455Connector implements Connector
         $response = $this->httpClient->request($request, $cancellation);
 
         if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
-            throw new ConnectionException(\sprintf(
+            throw new WebsocketConnectException(\sprintf(
                 'A %s (%d) response was not received; instead received response status: %s (%d)',
                 Http\Status::getReason(Http\Status::SWITCHING_PROTOCOLS),
                 Http\Status::SWITCHING_PROTOCOLS,
@@ -95,12 +95,12 @@ final class Rfc6455Connector implements Connector
     }
 
     /**
-     * @param Handshake $handshake
+     * @param WebsocketHandshake $handshake
      * @param string $key
      *
      * @return Request
      */
-    private function generateRequest(Handshake $handshake, string $key): Request
+    private function generateRequest(WebsocketHandshake $handshake, string $key): Request
     {
         $uri = $handshake->getUri();
         $uri = $uri->withScheme($uri->getScheme() === 'wss' ? 'https' : 'http');

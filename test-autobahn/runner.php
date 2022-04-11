@@ -2,7 +2,7 @@
 
 use Amp\ByteStream\StreamException;
 use Amp\Websocket\Client;
-use Amp\Websocket\Client\Handshake;
+use Amp\Websocket\Client\WebsocketHandshake;
 use Amp\Websocket\ClosedException;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -25,7 +25,7 @@ for ($i = 1; $i < $cases; $i++) {
     print $info['id'] . ' ' . \str_repeat('-', 80 - \strlen($info['id']) - 1) . PHP_EOL;
     print \wordwrap($info['description'], 80, PHP_EOL) . ' ';
 
-    $handshake = new Handshake('ws://127.0.0.1:9001/runCase?case=' . $i . '&agent=' . AGENT);
+    $handshake = new WebsocketHandshake('ws://127.0.0.1:9001/runCase?case=' . $i . '&agent=' . AGENT);
     $connection = Client\connect($handshake);
 
     try {

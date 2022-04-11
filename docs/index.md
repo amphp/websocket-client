@@ -31,7 +31,7 @@ require 'vendor/autoload.php';
 use Amp\Websocket\Client;
 
 Amp\Loop::run(function () {
-    /** @var Client\Connection $connection */
+    /** @var Client\WebsocketConnection $connection */
     $connection = yield Client\connect('ws://localhost:1337/ws');
 
     // do something
@@ -69,7 +69,7 @@ use Amp\Websocket;
 use Amp\Websocket\Client;
 
 Amp\Loop::run(function () {
-    /** @var Client\Connection $connection */
+    /** @var Client\WebsocketConnection $connection */
     $connection = yield Client\connect('ws://demos.kaazing.com/echo');
     yield $connection->send('Hello!');
 
