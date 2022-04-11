@@ -18,6 +18,7 @@ use Amp\Websocket\Server\ClientHandler;
 use Amp\Websocket\Server\EmptyHandshakeHandler;
 use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
+use Amp\Websocket\WebsocketClient;
 use Psr\Log\NullLogger;
 use function Amp\async;
 use function Amp\delay;
@@ -52,7 +53,7 @@ class ConnectionTest extends AsyncTestCase
     public function testSimpleBinaryEcho(): void
     {
         [$server, $address] = $this->createServer(new class implements ClientHandler {
-            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
+            public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
                     $client->sendBinary($message->buffer());
@@ -81,7 +82,7 @@ class ConnectionTest extends AsyncTestCase
     public function testSimpleTextEcho(): void
     {
         [$server, $address] = $this->createServer(new class implements ClientHandler {
-            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
+            public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
                     $client->send($message->buffer());
@@ -110,7 +111,7 @@ class ConnectionTest extends AsyncTestCase
     public function testUnconsumedMessage(): void
     {
         [$server, $address] = $this->createServer(new class implements ClientHandler {
-            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
+            public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 $client->send(\str_repeat('.', 1024 * 1024));
                 $client->send('Message');
@@ -144,7 +145,7 @@ class ConnectionTest extends AsyncTestCase
     public function testVeryLongMessage(): void
     {
         [$server, $address] = $this->createServer(new class implements ClientHandler {
-            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
+            public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10); // 10 MiB
                 $client->sendBinary($payload);
@@ -168,7 +169,7 @@ class ConnectionTest extends AsyncTestCase
     public function testTooLongMessage(): void
     {
         [$server, $address] = $this->createServer(new class() implements ClientHandler {
-            public function handleClient(Gateway $gateway, Client $client, Request $request, Response $response): void
+            public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 $payload = \str_repeat('.', 1024 * 1024 * 10 + 1); // 10 MiB + 1 byte
                 $client->sendBinary($payload);

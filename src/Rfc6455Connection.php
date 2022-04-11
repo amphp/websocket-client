@@ -7,10 +7,10 @@ use Amp\Cancellation;
 use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
-use Amp\Websocket\ClientMetadata;
-use Amp\Websocket\Code;
+use Amp\Websocket\CloseCode;
 use Amp\Websocket\Message;
 use Amp\Websocket\Rfc6455Client;
+use Amp\Websocket\WebsocketClientMetadata;
 
 final class Rfc6455Connection implements Connection
 {
@@ -95,7 +95,7 @@ final class Rfc6455Connection implements Connection
         $this->client->ping();
     }
 
-    public function getInfo(): ClientMetadata
+    public function getInfo(): WebsocketClientMetadata
     {
         return $this->client->getInfo();
     }
@@ -105,7 +105,7 @@ final class Rfc6455Connection implements Connection
         return $this->client->isClosed();
     }
 
-    public function close(int $code = Code::NORMAL_CLOSE, string $reason = ''): void
+    public function close(int $code = CloseCode::NORMAL_CLOSE, string $reason = ''): void
     {
         $this->client->close($code, $reason);
     }
