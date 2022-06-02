@@ -19,7 +19,6 @@ final class Rfc6455ConnectionFactory implements WebsocketConnectionFactory
         private readonly bool $validateUtf8 = WebsocketClient::DEFAULT_VALIDATE_UTF8,
         private readonly int $messageSizeLimit = WebsocketConnection::DEFAULT_MESSAGE_SIZE_LIMIT,
         private readonly int $frameSizeLimit = WebsocketConnection::DEFAULT_FRAME_SIZE_LIMIT,
-        private readonly int $streamThreshold = WebsocketClient::DEFAULT_STREAM_THRESHOLD,
         private readonly int $frameSplitThreshold = WebsocketClient::DEFAULT_FRAME_SPLIT_THRESHOLD,
         private readonly float $closePeriod = WebsocketClient::DEFAULT_CLOSE_PERIOD,
     ) {
@@ -40,7 +39,6 @@ final class Rfc6455ConnectionFactory implements WebsocketConnectionFactory
             validateUtf8: $this->validateUtf8,
             messageSizeLimit: $this->messageSizeLimit,
             frameSizeLimit: $this->frameSizeLimit,
-            streamThreshold: $this->streamThreshold,
             frameSplitThreshold: $this->frameSplitThreshold,
             closePeriod: $this->closePeriod,
         );

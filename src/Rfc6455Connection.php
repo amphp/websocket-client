@@ -8,9 +8,9 @@ use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
 use Amp\Websocket\CloseCode;
-use Amp\Websocket\Message;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\WebsocketClientMetadata;
+use Amp\Websocket\WebsocketMessage;
 
 final class Rfc6455Connection implements WebsocketConnection
 {
@@ -25,7 +25,7 @@ final class Rfc6455Connection implements WebsocketConnection
         return $this->response;
     }
 
-    public function receive(?Cancellation $cancellation = null): ?Message
+    public function receive(?Cancellation $cancellation = null): ?WebsocketMessage
     {
         return $this->client->receive($cancellation);
     }
