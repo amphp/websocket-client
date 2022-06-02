@@ -16,7 +16,6 @@ use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
 use Amp\Websocket\Server\ClientHandler;
 use Amp\Websocket\Server\EmptyHandshakeHandler;
-use Amp\Websocket\Server\Gateway;
 use Amp\Websocket\Server\Websocket;
 use Amp\Websocket\WebsocketClient;
 use Psr\Log\NullLogger;
@@ -28,8 +27,6 @@ class WebsocketConnectionTest extends AsyncTestCase
 {
     /**
      * This method creates a new server that listens on a randomly assigned port and returns the used port.
-     *
-     * @param ClientHandler $clientHandler
      *
      * @return array{HttpServer, SocketAddress} Returns the HttpServer instance and the used port number.
      * @throws SocketException

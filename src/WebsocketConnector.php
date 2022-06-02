@@ -8,11 +8,6 @@ use Amp\Http\Client\HttpException;
 interface WebsocketConnector
 {
     /**
-     * @param WebsocketHandshake $handshake
-     * @param Cancellation|null $cancellation
-     *
-     * @return WebsocketConnection
-     *
      * @throws HttpException Thrown if the request fails.
      * @throws WebsocketConnectException If the response received is invalid or is not a switching protocols (101) response.
      */

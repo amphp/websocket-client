@@ -12,8 +12,6 @@ interface WebsocketConnectionFactory
      * @param Response $response Response that initiated the websocket connection.
      * @param Socket $socket Underlying socket to be used for network communication.
      * @param CompressionContext|null $compressionContext CompressionContext generated from the response headers.
-     *
-     * @return WebsocketConnection
      */
     public function createConnection(
         Response $response,

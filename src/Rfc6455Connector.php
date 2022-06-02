@@ -30,11 +30,11 @@ final class Rfc6455Connector implements WebsocketConnector
         private readonly ?CompressionContextFactory $compressionFactory = new Rfc7692CompressionFactory(),
     ) {
         $this->httpClient = $httpClient
-            ?? (new HttpClientBuilder)
-                ->usingPool(new UnlimitedConnectionPool(
-                    new DefaultConnectionFactory(connectContext: (new ConnectContext)->withTcpNoDelay()))
+            ?? (new HttpClientBuilder)->usingPool(
+                new UnlimitedConnectionPool(
+                    new DefaultConnectionFactory(connectContext: (new ConnectContext)->withTcpNoDelay())
                 )
-                ->build();
+            )->build();
     }
 
     public function connect(WebsocketHandshake $handshake, ?Cancellation $cancellation = null): WebsocketConnection
@@ -94,12 +94,6 @@ final class Rfc6455Connector implements WebsocketConnector
         return $deferred->getFuture()->await();
     }
 
-    /**
-     * @param WebsocketHandshake $handshake
-     * @param string $key
-     *
-     * @return Request
-     */
     private function generateRequest(WebsocketHandshake $handshake, string $key): Request
     {
         $uri = $handshake->getUri();

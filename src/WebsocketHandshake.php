@@ -39,8 +39,6 @@ final class WebsocketHandshake extends Message
     }
 
     /**
-     * @param string|PsrUri $uri
-     *
      * @return self Cloned object
      */
     public function withUri(PsrUri|string $uri): self
@@ -119,7 +117,6 @@ final class WebsocketHandshake extends Message
     /**
      * Replaces the given header in the returned instance.
      *
-     * @param string $name
      * @param string|string[] $value
      *
      * @return self Cloned object.
@@ -135,7 +132,6 @@ final class WebsocketHandshake extends Message
     /**
      * Adds the given header in the returned instance.
      *
-     * @param string $name
      * @param string|string[] $value
      *
      * @return self Cloned object.
@@ -150,8 +146,6 @@ final class WebsocketHandshake extends Message
 
     /**
      * Removes the given header in the returned instance.
-     *
-     * @param string $name
      *
      * @return self Cloned object.
      */
@@ -181,11 +175,6 @@ final class WebsocketHandshake extends Message
         parent::addHeader($name, $value);
     }
 
-    /**
-     * @param string|PsrUri $uri
-     *
-     * @return PsrUri
-     */
     private function makeUri(PsrUri|string $uri): PsrUri
     {
         if (\is_string($uri)) {
