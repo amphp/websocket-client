@@ -1,7 +1,8 @@
 <?php
 
 use Amp\ByteStream\StreamException;
-use Amp\Websocket\Client;
+use Amp\Websocket\Client\Rfc6455ConnectionFactory;
+use Amp\Websocket\Client\Rfc6455Connector;
 use Amp\Websocket\Client\WebsocketHandshake;
 use Amp\Websocket\ClosedException;
 
@@ -11,14 +12,20 @@ const AGENT = 'amphp/websocket';
 
 $errors = 0;
 
-$connection = Client\connect('ws://127.0.0.1:9001/getCaseCount');
+$connector = new Rfc6455Connector(new Rfc6455ConnectionFactory(
+    messageSizeLimit: \PHP_INT_MAX,
+    frameSizeLimit: \PHP_INT_MAX,
+));
+
+$connection = $connector->connect(new WebsocketHandshake('ws://127.0.0.1:9001/getCaseCount'));
 $message = $connection->receive();
 $cases = (int) $message->buffer();
 
 echo "Going to run {$cases} test cases." . PHP_EOL;
 
 for ($i = 1; $i < $cases; $i++) {
-    $connection = Client\connect('ws://127.0.0.1:9001/getCaseInfo?case=' . $i . '&agent=' . AGENT);
+    $handshake = new WebsocketHandshake('ws://127.0.0.1:9001/getCaseInfo?case=' . $i . '&agent=' . AGENT);
+    $connection =  $connector->connect($handshake);
     $message = $connection->receive();
     $info = \json_decode($message->buffer(), true);
 
@@ -26,7 +33,7 @@ for ($i = 1; $i < $cases; $i++) {
     print \wordwrap($info['description'], 80, PHP_EOL) . ' ';
 
     $handshake = new WebsocketHandshake('ws://127.0.0.1:9001/runCase?case=' . $i . '&agent=' . AGENT);
-    $connection = Client\connect($handshake);
+    $connection = $connector->connect($handshake);
 
     try {
         while ($message = $connection->receive()) {
@@ -51,7 +58,8 @@ for ($i = 1; $i < $cases; $i++) {
         $connection->close();
     }
 
-    $connection = Client\connect('ws://127.0.0.1:9001/getCaseStatus?case=' . $i . '&agent=' . AGENT);
+    $handshake = new WebsocketHandshake('ws://127.0.0.1:9001/getCaseStatus?case=' . $i . '&agent=' . AGENT);
+    $connection =  $connector->connect($handshake);
     $message = $connection->receive();
     print($result = \json_decode($message->buffer(), true)['behavior']);
 
@@ -62,7 +70,7 @@ for ($i = 1; $i < $cases; $i++) {
     print PHP_EOL . PHP_EOL;
 }
 
-$connection = Client\connect('ws://127.0.0.1:9001/updateReports?agent=' . AGENT);
+$connection = $connector->connect(new WebsocketHandshake('ws://127.0.0.1:9001/updateReports?agent=' . AGENT));
 $connection->close();
 
 if ($errors) {
