@@ -1,8 +1,8 @@
 .php_cs.cache
+.phpunit.result.cache
 build
 composer.lock
-docs/Gemfile.lock
 phpunit.xml
 vendor
 reports
-.phpunit.result.cache
+composer-require-checker.phar
