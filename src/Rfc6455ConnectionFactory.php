@@ -25,7 +25,7 @@ final class Rfc6455ConnectionFactory implements WebsocketConnectionFactory
     }
 
     public function createConnection(
-        Response $response,
+        Response $handshakeResponse,
         Socket $socket,
         ?CompressionContext $compressionContext = null,
     ): WebsocketConnection {
@@ -43,6 +43,6 @@ final class Rfc6455ConnectionFactory implements WebsocketConnectionFactory
             closePeriod: $this->closePeriod,
         );
 
-        return new Rfc6455Connection($client, $response);
+        return new Rfc6455Connection($client, $handshakeResponse);
     }
 }

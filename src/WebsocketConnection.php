@@ -13,5 +13,5 @@ interface WebsocketConnection extends WebsocketClient
     /**
      * @return Response Server response originating the client connection.
      */
-    public function getResponse(): Response;
+    public function getHandshakeResponse(): Response;
 }

@@ -16,13 +16,13 @@ final class Rfc6455Connection implements WebsocketConnection
 {
     public function __construct(
         private readonly Rfc6455Client $client,
-        private readonly Response $response,
+        private readonly Response $handshakeResponse,
     ) {
     }
 
-    public function getResponse(): Response
+    public function getHandshakeResponse(): Response
     {
-        return $this->response;
+        return $this->handshakeResponse;
     }
 
     public function receive(?Cancellation $cancellation = null): ?WebsocketMessage
