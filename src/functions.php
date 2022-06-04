@@ -10,7 +10,7 @@ use Revolt\EventLoop;
 /**
  * Set or access the global websocket Connector instance.
  */
-function connector(?WebsocketConnector $connector = null): WebsocketConnector
+function websocketConnector(?WebsocketConnector $connector = null): WebsocketConnector
 {
     static $map;
     $map ??= new \WeakMap();
@@ -35,5 +35,5 @@ function connect(
         $handshake = new WebsocketHandshake($handshake);
     }
 
-    return connector()->connect($handshake, $cancellation);
+    return websocketConnector()->connect($handshake, $cancellation);
 }
