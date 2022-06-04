@@ -21,8 +21,6 @@ final class WebsocketHandshake extends Message
      * @param string|PsrUri $uri target address of websocket (e.g. ws://foo.bar/bar or
      * wss://crypto.example/?secureConnection) or a PsrUri instance.
      * @param string[]|string[][] $headers
-     *
-     * @throws \TypeError If $uri is not a string or an instance of PsrUri.
      */
     public function __construct(PsrUri|string $uri, array $headers = [])
     {
@@ -121,7 +119,7 @@ final class WebsocketHandshake extends Message
      *
      * @return self Cloned object.
      */
-    public function withHeader(string $name, $value): self
+    public function withHeader(string $name, string|array $value): self
     {
         $clone = clone $this;
         $clone->setHeader($name, $value);
@@ -136,7 +134,7 @@ final class WebsocketHandshake extends Message
      *
      * @return self Cloned object.
      */
-    public function withAddedHeader(string $name, $value): self
+    public function withAddedHeader(string $name, string|array $value): self
     {
         $clone = clone $this;
         $clone->addHeader($name, $value);
