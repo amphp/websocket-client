@@ -21,38 +21,25 @@ composer require amphp/websocket-client
 More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
-use Amp\Websocket\Client\WebsocketConnection;
-use Amp\Websocket\Message;
-use function Amp\delay;
+use Amp\Websocket\Client\WebsocketHandshake;
 use function Amp\Websocket\Client\connect;
 
-// Connects to the Kaazing echoing websocket demo.
-Amp\Loop::run(function () {
-    /** @var WebsocketConnection $connection */
-    $connection = yield connect('ws://demos.kaazing.com/echo');
-    yield $connection->send("Hello!");
+// Connects to the websocket endpoint at libwebsockets.org which sends a message every 50ms.
+$handshake = (new WebsocketHandshake('wss://libwebsockets.org'))
+    ->withHeader('Sec-WebSocket-Protocol', 'dumb-increment-protocol');
 
-    $i = 0;
+$connection = connect($handshake);
 
-    while ($message = yield $connection->receive()) {
-        /** @var Message $message */
-        $payload = yield $message->buffer();
-        printf("Received: %s\n", $payload);
+while ($message = $connection->receive()) {
+    $payload = $message->buffer();
 
-        if ($payload === "Goodbye!") {
-            $connection->close();
-            break;
-        }
+    printf("Received: %s\n", $payload);
 
-        yield delay(1000); // Pause the coroutine for 1 second.
-
-        if ($i < 3) {
-            yield $connection->send("Ping: " . ++$i);
-        } else {
-            yield $connection->send("Goodbye!");
-        }
+    if ($payload === '100') {
+        $connection->close();
+        break;
     }
-});
+}
 ```
 
 ## Versioning
