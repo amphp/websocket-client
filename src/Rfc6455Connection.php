@@ -14,7 +14,7 @@ use Amp\Websocket\WebsocketMessage;
 
 final class Rfc6455Connection implements WebsocketConnection
 {
-    public const DEFAULT_MESSAGE_SIZE_LIMIT = (2 ** 20) * 100; // 100MB
+    public const DEFAULT_MESSAGE_SIZE_LIMIT = (2 ** 20) * 10; // 10MB
     public const DEFAULT_FRAME_SIZE_LIMIT = (2 ** 20) * 10; // 10MB
 
     public function __construct(
