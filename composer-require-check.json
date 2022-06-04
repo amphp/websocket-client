@@ -16,7 +16,7 @@
         "mixed",
         "void",
         "object",
-        "connector"
+        "websocketConnector"
     ],
     "php-core-extensions": [
         "Core",
