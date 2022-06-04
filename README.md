@@ -1,7 +1,5 @@
 # websocket-client
 
-[![Build Status](https://img.shields.io/travis/amphp/websocket-client/master.svg?style=flat-square)](https://travis-ci.org/amphp/websocket-client)
-[![CoverageStatus](https://img.shields.io/coveralls/amphp/websocket-client/master.svg?style=flat-square)](https://coveralls.io/github/amphp/websocket-client?branch=master)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
 
 `amphp/websocket-client` is an async WebSocket client for PHP based on Amp.
@@ -16,7 +14,7 @@ composer require amphp/websocket-client
 
 ## Requirements
 
-* PHP 7.2+
+* PHP 8.1+
 
 ## Documentation & Examples
 
