@@ -88,4 +88,5 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
           docker run -ti -d --rm -v ${PWD}/test-autobahn/config:/config -v ${PWD}/test-autobahn/reports:/reports -p 9001:9001 --name fuzzingserver crossbario/autobahn-testsuite
+          sleep 3
           php test-autobahn/runner.php
