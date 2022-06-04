@@ -61,7 +61,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Amp\\Websocket\\Client\\Test\\": "test"
+            "Amp\\Websocket\\Client\\": "test"
         }
     }
 }

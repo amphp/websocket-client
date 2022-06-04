@@ -1,6 +1,6 @@
 <?php /** @noinspection PhpUnhandledExceptionInspection */
 
-namespace Amp\Websocket\Client\Test;
+namespace Amp\Websocket\Client;
 
 use Amp\Http\Server\DefaultErrorHandler;
 use Amp\Http\Server\HttpServer;
@@ -21,7 +21,6 @@ use Amp\Websocket\WebsocketClient;
 use Psr\Log\NullLogger;
 use function Amp\async;
 use function Amp\delay;
-use function Amp\Websocket\Client\connect;
 
 class WebsocketConnectionTest extends AsyncTestCase
 {
