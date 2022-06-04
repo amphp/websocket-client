@@ -23,6 +23,6 @@ Truths which we believe to be self-evident:
 
 ## Code style
 
-The amphp project adheres to the PSR-2 style guide.
+The AMPHP project adheres to the PSR-2 style guide.
 
 https://github.com/php-fig/fig-standards/blob/master/accepted/PSR-2-coding-style-guide.md
