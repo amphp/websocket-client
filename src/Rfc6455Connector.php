@@ -22,12 +22,12 @@ final class Rfc6455Connector implements WebsocketConnector
     private readonly HttpClient $httpClient;
 
     /**
-     * @param CompressionContextFactory|null $compressionFactory Use null to disable compression.
+     * @param CompressionContextFactory|null $compressionContextFactory Use null to disable compression.
      */
     public function __construct(
         private readonly WebsocketConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
         HttpClient $httpClient = null,
-        private readonly ?CompressionContextFactory $compressionFactory = new Rfc7692CompressionFactory(),
+        private readonly ?CompressionContextFactory $compressionContextFactory = new Rfc7692CompressionFactory(),
     ) {
         $this->httpClient = $httpClient
             ?? (new HttpClientBuilder)->usingPool(
@@ -44,7 +44,7 @@ final class Rfc6455Connector implements WebsocketConnector
 
         $deferred = new DeferredFuture();
         $connectionFactory = $this->connectionFactory;
-        $compressionFactory = $this->compressionFactory;
+        $compressionContextFactory = $this->compressionContextFactory;
 
         $request->setUpgradeHandler(static function (
             EncryptableSocket $socket,
@@ -52,7 +52,7 @@ final class Rfc6455Connector implements WebsocketConnector
             Response $response,
         ) use (
             $connectionFactory,
-            $compressionFactory,
+            $compressionContextFactory,
             $deferred,
             $key,
         ): void {
@@ -69,7 +69,7 @@ final class Rfc6455Connector implements WebsocketConnector
             $extensions = \array_column(Http\parseFieldValueComponents($response, 'sec-websocket-extensions') ?? [], 0, 0);
 
             foreach ($extensions as $extension) {
-                if ($compressionContext = $compressionFactory?->fromServerHeader($extension)) {
+                if ($compressionContext = $compressionContextFactory?->fromServerHeader($extension)) {
                     break;
                 }
             }
@@ -108,8 +108,8 @@ final class Rfc6455Connector implements WebsocketConnector
 
         $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions') ?? [], 0, 0);
 
-        if ($this->compressionFactory && \extension_loaded('zlib')) {
-            $extensions[] = $this->compressionFactory->createRequestHeader();
+        if ($this->compressionContextFactory && \extension_loaded('zlib')) {
+            $extensions[] = $this->compressionContextFactory->createRequestHeader();
         }
 
         if (!empty($extensions)) {
