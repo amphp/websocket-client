@@ -14,6 +14,7 @@ use Amp\Socket\SocketException;
 use Amp\TimeoutCancellation;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
+use Amp\Websocket\Parser\Rfc6455ParserFactory;
 use Amp\Websocket\Server\EmptyWebsocketHandshakeHandler;
 use Amp\Websocket\Server\Websocket;
 use Amp\Websocket\Server\WebsocketClientHandler;
@@ -149,7 +150,9 @@ class WebsocketConnectionTest extends AsyncTestCase
         });
 
         $connector = new Client\Rfc6455Connector(
-            connectionFactory: new Client\Rfc6455ConnectionFactory(messageSizeLimit: 1024 * 1024 * 10),
+            connectionFactory: new Client\Rfc6455ConnectionFactory(
+                parserFactory: new Rfc6455ParserFactory(messageSizeLimit: 1024 * 1024 * 10),
+            ),
         );
 
         try {
@@ -173,7 +176,9 @@ class WebsocketConnectionTest extends AsyncTestCase
         });
 
         $connector = new Client\Rfc6455Connector(
-            connectionFactory: new Client\Rfc6455ConnectionFactory(messageSizeLimit: 1024 * 1024 * 10),
+            connectionFactory: new Client\Rfc6455ConnectionFactory(
+                parserFactory: new Rfc6455ParserFactory(messageSizeLimit: 1024 * 1024 * 10),
+            ),
         );
 
         try {

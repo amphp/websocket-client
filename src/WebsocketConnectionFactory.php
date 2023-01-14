@@ -4,7 +4,7 @@ namespace Amp\Websocket\Client;
 
 use Amp\Http\Client\Response;
 use Amp\Socket\Socket;
-use Amp\Websocket\CompressionContext;
+use Amp\Websocket\Compression\CompressionContext;
 
 interface WebsocketConnectionFactory
 {

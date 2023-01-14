@@ -14,8 +14,8 @@ use Amp\Http\Client\Response;
 use Amp\Socket\ConnectContext;
 use Amp\Socket\EncryptableSocket;
 use Amp\Websocket;
-use Amp\Websocket\CompressionContextFactory;
-use Amp\Websocket\Rfc7692CompressionFactory;
+use Amp\Websocket\Compression\CompressionContextFactory;
+use Amp\Websocket\Compression\Rfc7692CompressionFactory;
 
 final class Rfc6455Connector implements WebsocketConnector
 {
