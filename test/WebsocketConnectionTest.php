@@ -1,4 +1,4 @@
-<?php /** @noinspection PhpUnhandledExceptionInspection */
+<?php declare(strict_types=1);
 
 namespace Amp\Websocket\Client;
 
