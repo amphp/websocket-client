@@ -32,7 +32,7 @@
         "php": ">=8.1",
         "amphp/amp": "^3",
         "amphp/byte-stream": "^2",
-        "amphp/http": "^1.3",
+        "amphp/http": "^2-dev",
         "amphp/http-client": "^5",
         "amphp/socket": "^2",
         "amphp/websocket": "^2",

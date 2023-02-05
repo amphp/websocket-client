@@ -3,11 +3,11 @@
 namespace Amp\Websocket\Client;
 
 use Amp\Http\Client\Request;
-use Amp\Http\Message;
+use Amp\Http\HttpMessage;
 use League\Uri;
 use Psr\Http\Message\UriInterface as PsrUri;
 
-final class WebsocketHandshake extends Message
+final class WebsocketHandshake extends HttpMessage
 {
     private PsrUri $uri;
 
@@ -95,7 +95,7 @@ final class WebsocketHandshake extends Message
     /**
      * Replaces all headers in the returned instance.
      *
-     * @param string[]|string[][] $headers
+     * @param array<non-empty-string, string|array<string>> $headers
      *
      * @return self Cloned object.
      */
@@ -115,7 +115,8 @@ final class WebsocketHandshake extends Message
     /**
      * Replaces the given header in the returned instance.
      *
-     * @param string|string[] $value
+     * @param non-empty-string $name
+     * @param string|array<string> $value
      *
      * @return self Cloned object.
      */
@@ -130,7 +131,8 @@ final class WebsocketHandshake extends Message
     /**
      * Adds the given header in the returned instance.
      *
-     * @param string|string[] $value
+     * @param non-empty-string $name
+     * @param string|array<string> $value
      *
      * @return self Cloned object.
      */

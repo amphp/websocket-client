@@ -81,11 +81,11 @@ final class Rfc6455Connector implements WebsocketConnector
 
         $response = $this->httpClient->request($request, $cancellation);
 
-        if ($response->getStatus() !== Http\Status::SWITCHING_PROTOCOLS) {
+        if ($response->getStatus() !== Http\HttpStatus::SWITCHING_PROTOCOLS) {
             throw new WebsocketConnectException(\sprintf(
                 'A %s (%d) response was not received; instead received response status: %s (%d)',
-                Http\Status::getReason(Http\Status::SWITCHING_PROTOCOLS),
-                Http\Status::SWITCHING_PROTOCOLS,
+                Http\HttpStatus::getReason(Http\HttpStatus::SWITCHING_PROTOCOLS),
+                Http\HttpStatus::SWITCHING_PROTOCOLS,
                 $response->getReason(),
                 $response->getStatus()
             ), $response);
