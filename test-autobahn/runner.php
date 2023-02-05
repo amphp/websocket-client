@@ -5,6 +5,7 @@ use Amp\Websocket\Client\Rfc6455ConnectionFactory;
 use Amp\Websocket\Client\Rfc6455Connector;
 use Amp\Websocket\Client\WebsocketHandshake;
 use Amp\Websocket\ClosedException;
+use Amp\Websocket\Parser\Rfc6455ParserFactory;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -13,8 +14,7 @@ const AGENT = 'amphp/websocket';
 $errors = 0;
 
 $connector = new Rfc6455Connector(new Rfc6455ConnectionFactory(
-    messageSizeLimit: \PHP_INT_MAX,
-    frameSizeLimit: \PHP_INT_MAX,
+    parserFactory: new Rfc6455ParserFactory(messageSizeLimit: \PHP_INT_MAX, frameSizeLimit: \PHP_INT_MAX),
 ));
 
 $connection = $connector->connect(new WebsocketHandshake('ws://127.0.0.1:9001/getCaseCount'));
