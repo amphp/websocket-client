@@ -12,7 +12,7 @@ use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use Amp\Http\Client\Response;
 use Amp\Socket\ConnectContext;
-use Amp\Socket\EncryptableSocket;
+use Amp\Socket\Socket;
 use Amp\Websocket;
 use Amp\Websocket\Compression\CompressionContextFactory;
 use Amp\Websocket\Compression\Rfc7692CompressionFactory;
@@ -47,7 +47,7 @@ final class Rfc6455Connector implements WebsocketConnector
         $compressionContextFactory = $this->compressionContextFactory;
 
         $request->setUpgradeHandler(static function (
-            EncryptableSocket $socket,
+            Socket $socket,
             Request $request,
             Response $response,
         ) use (
