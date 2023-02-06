@@ -4,6 +4,8 @@ namespace Amp\Websocket\Client;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Http;
 use Amp\Http\Client\Connection\DefaultConnectionFactory;
 use Amp\Http\Client\Connection\UnlimitedConnectionPool;
@@ -19,6 +21,9 @@ use Amp\Websocket\Compression\Rfc7692CompressionFactory;
 
 final class Rfc6455Connector implements WebsocketConnector
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private readonly HttpClient $httpClient;
 
     /**

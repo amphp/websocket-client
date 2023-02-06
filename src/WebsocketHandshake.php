@@ -2,6 +2,8 @@
 
 namespace Amp\Websocket\Client;
 
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Http\Client\Request;
 use Amp\Http\HttpMessage;
 use League\Uri;
@@ -9,6 +11,9 @@ use Psr\Http\Message\UriInterface as PsrUri;
 
 final class WebsocketHandshake extends HttpMessage
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private PsrUri $uri;
 
     private float $tcpConnectTimeout = 10;

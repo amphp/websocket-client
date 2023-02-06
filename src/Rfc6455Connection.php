@@ -4,6 +4,8 @@ namespace Amp\Websocket\Client;
 
 use Amp\ByteStream\ReadableStream;
 use Amp\Cancellation;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
@@ -14,6 +16,9 @@ use Amp\Websocket\WebsocketMessage;
 
 final class Rfc6455Connection implements WebsocketConnection
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     public const DEFAULT_MESSAGE_SIZE_LIMIT = (2 ** 20) * 10; // 10MB
     public const DEFAULT_FRAME_SIZE_LIMIT = (2 ** 20) * 10; // 10MB
 
