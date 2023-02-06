@@ -12,12 +12,15 @@ jobs:
           - operating-system: 'ubuntu-latest'
             php-version: '8.1'
 
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.2'
+
           - operating-system: 'windows-latest'
-            php-version: '8.1'
+            php-version: '8.2'
             job-description: 'on Windows'
 
           - operating-system: 'macos-latest'
-            php-version: '8.1'
+            php-version: '8.2'
             job-description: 'on macOS'
 
     name: PHP ${{ matrix.php-version }} ${{ matrix.job-description }}
@@ -84,7 +87,7 @@ jobs:
         if: runner.os != 'Windows' && matrix.composer-require-checker-version != 'none'
 
       - name: Autobahn
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.php-version == '8.2'
         shell: 'script -q -e -c "bash {0}"'
         run: |
           docker run -ti -d --rm -v ${PWD}/test-autobahn/config:/config -v ${PWD}/test-autobahn/reports:/reports -p 9001:9001 --name fuzzingserver crossbario/autobahn-testsuite
