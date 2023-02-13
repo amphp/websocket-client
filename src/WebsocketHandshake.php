@@ -2,7 +2,6 @@
 
 namespace Amp\Websocket\Client;
 
-use Amp\ForbidCloning;
 use Amp\ForbidSerialization;
 use Amp\Http\Client\Request;
 use Amp\Http\HttpMessage;
@@ -11,7 +10,6 @@ use Psr\Http\Message\UriInterface as PsrUri;
 
 final class WebsocketHandshake extends HttpMessage
 {
-    use ForbidCloning;
     use ForbidSerialization;
 
     private PsrUri $uri;
