@@ -3,6 +3,9 @@
 namespace Amp\Websocket\Client;
 
 use Amp\Http\Server\DefaultErrorHandler;
+use Amp\Http\Server\Driver\ConnectionLimitingClientFactory;
+use Amp\Http\Server\Driver\ConnectionLimitingServerSocketFactory;
+use Amp\Http\Server\Driver\SocketClientFactory;
 use Amp\Http\Server\HttpServer;
 use Amp\Http\Server\Request;
 use Amp\Http\Server\Response;
@@ -11,6 +14,7 @@ use Amp\PHPUnit\AsyncTestCase;
 use Amp\Socket\InternetAddress;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\SocketException;
+use Amp\Sync\LocalSemaphore;
 use Amp\TimeoutCancellation;
 use Amp\Websocket\Client;
 use Amp\Websocket\ClosedException;
@@ -25,6 +29,9 @@ use function Amp\delay;
 
 class WebsocketConnectionTest extends AsyncTestCase
 {
+    private const DEFAULT_CONNECTION_LIMIT = 1000;
+    private const DEFAULT_CONNECTIONS_PER_IP_LIMIT = 10;
+
     /**
      * This method creates a new server that listens on a randomly assigned port and returns the used port.
      *
@@ -35,7 +42,16 @@ class WebsocketConnectionTest extends AsyncTestCase
     {
         $logger = new NullLogger;
 
-        $httpServer = new SocketHttpServer($logger);
+        $serverSocketFactory = new ConnectionLimitingServerSocketFactory(
+            new LocalSemaphore(self::DEFAULT_CONNECTION_LIMIT)
+        );
+        $clientFactory = new ConnectionLimitingClientFactory(
+            new SocketClientFactory($logger),
+            $logger,
+            self::DEFAULT_CONNECTIONS_PER_IP_LIMIT
+        );
+
+        $httpServer = new SocketHttpServer($logger, $serverSocketFactory, $clientFactory);
         $httpServer->expose(new InternetAddress('127.0.0.1', 0));
         $httpServer->start(
             new Websocket($logger, new EmptyWebsocketHandshakeHandler(), $clientHandler),
