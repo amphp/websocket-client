@@ -41,7 +41,7 @@
         "revolt/event-loop": "^1 || ^0.2.4"
     },
     "require-dev": {
-        "amphp/http-server": "^3",
+        "amphp/http-server": "3.x-dev",
         "amphp/websocket-server": "^3",
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "^2",
