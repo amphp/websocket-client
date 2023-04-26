@@ -71,7 +71,7 @@ final class Rfc6455Connector implements WebsocketConnector
                 return;
             }
 
-            $extensions = \array_column(Http\parseFieldValueComponents($response, 'sec-websocket-extensions') ?? [], 0, 0);
+            $extensions = Http\splitHeader($response, 'sec-websocket-extensions') ?? [];
 
             foreach ($extensions as $extension) {
                 if ($compressionContext = $compressionContextFactory?->fromServerHeader($extension)) {
@@ -111,7 +111,7 @@ final class Rfc6455Connector implements WebsocketConnector
         $request->setTlsHandshakeTimeout($handshake->getTlsHandshakeTimeout());
         $request->setHeaderSizeLimit($handshake->getHeaderSizeLimit());
 
-        $extensions = \array_column(Http\parseFieldValueComponents($request, 'sec-websocket-extensions') ?? [], 0, 0);
+        $extensions = Http\splitHeader($request, 'sec-websocket-extensions');
 
         if ($this->compressionContextFactory && \extension_loaded('zlib')) {
             $extensions[] = $this->compressionContextFactory->createRequestHeader();

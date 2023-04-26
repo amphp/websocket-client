@@ -35,7 +35,7 @@ class WebsocketConnectionTest extends AsyncTestCase
     {
         $logger = new NullLogger;
 
-        $httpServer = new SocketHttpServer($logger);
+        $httpServer = SocketHttpServer::createForDirectAccess($logger);
         $httpServer->expose(new InternetAddress('127.0.0.1', 0));
         $httpServer->start(
             new Websocket($logger, new EmptyWebsocketHandshakeHandler(), $clientHandler),

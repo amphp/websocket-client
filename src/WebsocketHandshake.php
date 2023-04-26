@@ -5,14 +5,19 @@ namespace Amp\Websocket\Client;
 use Amp\ForbidSerialization;
 use Amp\Http\Client\Request;
 use Amp\Http\HttpMessage;
+use Amp\Http\HttpRequest;
 use League\Uri;
 use Psr\Http\Message\UriInterface as PsrUri;
 
-final class WebsocketHandshake extends HttpMessage
+/**
+ * @psalm-import-type HeaderParamArrayType from HttpMessage
+ * @psalm-import-type HeaderParamValueType from HttpMessage
+ * @psalm-import-type QueryArrayType from HttpRequest
+ * @psalm-import-type QueryValueType from HttpRequest
+ */
+final class WebsocketHandshake extends HttpRequest
 {
     use ForbidSerialization;
-
-    private PsrUri $uri;
 
     private float $tcpConnectTimeout = 10;
 
@@ -21,22 +26,15 @@ final class WebsocketHandshake extends HttpMessage
     private int $headerSizeLimit = Request::DEFAULT_HEADER_SIZE_LIMIT;
 
     /**
-     * @param string|PsrUri $uri target address of websocket (e.g. ws://foo.bar/bar or
+     * @param PsrUri|string $uri Target address of websocket (e.g. ws://foo.bar/bar or
      * wss://crypto.example/?secureConnection) or a PsrUri instance.
-     * @param string[]|string[][] $headers
+     * @param HeaderParamArrayType $headers
      */
     public function __construct(PsrUri|string $uri, array $headers = [])
     {
-        $this->uri = $this->makeUri($uri);
-        $this->setHeaders($headers);
-    }
+        parent::__construct('GET', self::makeUri($uri));
 
-    /**
-     * @return PsrUri Websocket URI (scheme will be either ws or wss).
-     */
-    public function getUri(): PsrUri
-    {
-        return $this->uri;
+        $this->setHeaders($headers);
     }
 
     /**
@@ -45,7 +43,7 @@ final class WebsocketHandshake extends HttpMessage
     public function withUri(PsrUri|string $uri): self
     {
         $clone = clone $this;
-        $clone->uri = $clone->makeUri($uri);
+        $clone->setUri(self::makeUri($uri));
 
         return $clone;
     }
@@ -98,18 +96,13 @@ final class WebsocketHandshake extends HttpMessage
     /**
      * Replaces all headers in the returned instance.
      *
-     * @param array<non-empty-string, string|array<string>> $headers
+     * @param HeaderParamArrayType $headers
      *
      * @return self Cloned object.
      */
     public function withHeaders(array $headers): self
     {
         $clone = clone $this;
-
-        foreach ($clone->getRawHeaders() as [$field]) {
-            $clone->removeHeader($field);
-        }
-
         $clone->setHeaders($headers);
 
         return $clone;
@@ -119,7 +112,7 @@ final class WebsocketHandshake extends HttpMessage
      * Replaces the given header in the returned instance.
      *
      * @param non-empty-string $name
-     * @param string|array<string> $value
+     * @param HeaderParamValueType $value
      *
      * @return self Cloned object.
      */
@@ -135,7 +128,7 @@ final class WebsocketHandshake extends HttpMessage
      * Adds the given header in the returned instance.
      *
      * @param non-empty-string $name
-     * @param string|array<string> $value
+     * @param HeaderParamValueType $value
      *
      * @return self Cloned object.
      */
@@ -160,7 +153,7 @@ final class WebsocketHandshake extends HttpMessage
         return $clone;
     }
 
-    protected function setHeader(string $name, $value): void
+    protected function setHeader(string $name, array|string $value): void
     {
         if (($name[0] ?? ':') === ':') {
             throw new \Error("Header name cannot be empty or start with a colon (:)");
@@ -169,7 +162,7 @@ final class WebsocketHandshake extends HttpMessage
         parent::setHeader($name, $value);
     }
 
-    protected function addHeader(string $name, $value): void
+    protected function addHeader(string $name, array|string $value): void
     {
         if (($name[0] ?? ':') === ':') {
             throw new \Error("Header name cannot be empty or start with a colon (:)");
@@ -178,25 +171,80 @@ final class WebsocketHandshake extends HttpMessage
         parent::addHeader($name, $value);
     }
 
-    private function makeUri(PsrUri|string $uri): PsrUri
+    /**
+     * @param QueryArrayType $parameters
+     *
+     * @return self Cloned object.
+     */
+    public function withQueryParameters(array $parameters): self
+    {
+        $clone = clone $this;
+        $clone->setQueryParameters($parameters);
+
+        return $clone;
+    }
+
+    /**
+     * @param QueryValueType $value
+     *
+     * @return self Cloned object.
+     */
+    public function withQueryParameter(string $key, array|string|null $value): self
+    {
+        $clone = clone $this;
+        $clone->setQueryParameter($key, $value);
+
+        return $clone;
+    }
+
+    /**
+     * @param QueryValueType $value
+     *
+     * @return self Cloned object.
+     */
+    public function withAddedQueryParameter(string $key, array|string|null $value): self
+    {
+        $clone = clone $this;
+        $clone->addQueryParameter($key, $value);
+
+        return $clone;
+    }
+
+    /**
+     * @return self Cloned object.
+     */
+    public function withoutQueryParameter(string $key): self
+    {
+        $clone = clone $this;
+        $clone->removeQueryParameter($key);
+
+        return $clone;
+    }
+
+    /**
+     * @return self Cloned object.
+     */
+    public function withoutQuery(): self
+    {
+        $clone = clone $this;
+        $clone->removeQuery();
+
+        return $clone;
+    }
+
+    private static function makeUri(PsrUri|string $uri): PsrUri
     {
         if (\is_string($uri)) {
             try {
                 $uri = Uri\Http::createFromString($uri);
             } catch (\Exception $exception) {
-                throw new \Error('Invalid Websocket URI provided', 0, $exception);
+                throw new \ValueError('Invalid Websocket URI provided', 0, $exception);
             }
         }
 
-        switch ($uri->getScheme()) {
-            case 'ws':
-            case 'wss':
-                break;
-
-            default:
-                throw new \Error('The URI scheme must be ws or wss: \'' . $uri->getScheme() . '\'');
-        }
-
-        return $uri;
+        return match ($uri->getScheme()) {
+            'ws', 'wss' => $uri,
+            default => throw new \ValueError('The URI scheme must be ws or wss, got "' . $uri->getScheme() . '"'),
+        };
     }
 }
