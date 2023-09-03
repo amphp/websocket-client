@@ -13,12 +13,12 @@ use Amp\Socket\SocketAddress;
 use Amp\Socket\SocketException;
 use Amp\TimeoutCancellation;
 use Amp\Websocket\Client;
-use Amp\Websocket\ClosedException;
 use Amp\Websocket\Parser\Rfc6455ParserFactory;
 use Amp\Websocket\Server\EmptyWebsocketHandshakeHandler;
 use Amp\Websocket\Server\Websocket;
 use Amp\Websocket\Server\WebsocketClientHandler;
 use Amp\Websocket\WebsocketClient;
+use Amp\Websocket\WebsocketClosedException;
 use Psr\Log\NullLogger;
 use function Amp\async;
 use function Amp\delay;
@@ -82,14 +82,14 @@ class WebsocketConnectionTest extends AsyncTestCase
             public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
                 while ($message = $client->receive()) {
-                    $client->send($message->buffer());
+                    $client->sendText($message->buffer());
                 }
             }
         });
 
         try {
             $client = connect('ws://' . $address->toString());
-            $client->send('Hey!');
+            $client->sendText('Hey!');
 
             $message = $client->receive();
 
@@ -110,8 +110,8 @@ class WebsocketConnectionTest extends AsyncTestCase
         [$server, $address] = $this->createServer(new class implements WebsocketClientHandler {
             public function handleClient(WebsocketClient $client, Request $request, Response $response): void
             {
-                $client->send(\str_repeat('.', 1024 * 1024));
-                $client->send('Message');
+                $client->sendText(\str_repeat('.', 1024 * 1024));
+                $client->sendText('Message');
                 $client->close();
             }
         });
@@ -188,7 +188,7 @@ class WebsocketConnectionTest extends AsyncTestCase
             $message->buffer();
 
             self::fail('Buffering the message should have thrown a ClosedException due to exceeding the message size limit');
-        } catch (ClosedException $exception) {
+        } catch (WebsocketClosedException $exception) {
             $this->assertSame('Received payload exceeds maximum allowable size', $exception->getReason());
         } finally {
             $server->stop();

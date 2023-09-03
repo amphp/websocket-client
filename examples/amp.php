@@ -13,7 +13,7 @@ $handshake = (new WebsocketHandshake('ws://localhost:1337/broadcast'))
 
 $connection = connect($handshake);
 
-$connection->send('Hello!');
+$connection->sendText('Hello!');
 
 $i = 0;
 
@@ -30,8 +30,8 @@ while ($message = $connection->receive()) {
     delay(1);
 
     if ($i < 3) {
-        $connection->send('Ping: ' . ++$i);
+        $connection->sendText('Ping: ' . ++$i);
     } else {
-        $connection->send('Goodbye!');
+        $connection->sendText('Goodbye!');
     }
 }

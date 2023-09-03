@@ -16,8 +16,8 @@ use Amp\Http\Client\Response;
 use Amp\Socket\ConnectContext;
 use Amp\Socket\Socket;
 use Amp\Websocket;
-use Amp\Websocket\Compression\CompressionContextFactory;
 use Amp\Websocket\Compression\Rfc7692CompressionFactory;
+use Amp\Websocket\Compression\WebsocketCompressionContextFactory;
 
 final class Rfc6455Connector implements WebsocketConnector
 {
@@ -27,12 +27,12 @@ final class Rfc6455Connector implements WebsocketConnector
     private readonly HttpClient $httpClient;
 
     /**
-     * @param CompressionContextFactory|null $compressionContextFactory Use null to disable compression.
+     * @param WebsocketCompressionContextFactory|null $compressionContextFactory Use null to disable compression.
      */
     public function __construct(
         private readonly WebsocketConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
         HttpClient $httpClient = null,
-        private readonly ?CompressionContextFactory $compressionContextFactory = new Rfc7692CompressionFactory(),
+        private readonly ?WebsocketCompressionContextFactory $compressionContextFactory = new Rfc7692CompressionFactory(),
     ) {
         $this->httpClient = $httpClient
             ?? (new HttpClientBuilder)->usingPool(

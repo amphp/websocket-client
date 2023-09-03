@@ -4,8 +4,8 @@ use Amp\ByteStream\StreamException;
 use Amp\Websocket\Client\Rfc6455ConnectionFactory;
 use Amp\Websocket\Client\Rfc6455Connector;
 use Amp\Websocket\Client\WebsocketHandshake;
-use Amp\Websocket\ClosedException;
 use Amp\Websocket\Parser\Rfc6455ParserFactory;
+use Amp\Websocket\WebsocketClosedException;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -42,10 +42,10 @@ for ($i = 1; $i < $cases; $i++) {
             if ($message->isBinary()) {
                 $connection->sendBinary($content);
             } else {
-                $connection->send($content);
+                $connection->sendText($content);
             }
         }
-    } catch (ClosedException $e) {
+    } catch (WebsocketClosedException $e) {
         // ignore
     } catch (AssertionError $e) {
         print 'Assertion error: ' . $e->getMessage() . PHP_EOL;

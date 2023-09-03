@@ -9,12 +9,14 @@ use Amp\ForbidSerialization;
 use Amp\Http\Client\Response;
 use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
-use Amp\Websocket\CloseCode;
 use Amp\Websocket\Rfc6455Client;
-use Amp\Websocket\WebsocketClientMetadata;
+use Amp\Websocket\WebsocketCloseCode;
+use Amp\Websocket\WebsocketCount;
 use Amp\Websocket\WebsocketMessage;
+use Amp\Websocket\WebsocketTimestamp;
+use Traversable;
 
-final class Rfc6455Connection implements WebsocketConnection
+final class Rfc6455Connection implements WebsocketConnection, \IteratorAggregate
 {
     use ForbidCloning;
     use ForbidSerialization;
@@ -63,11 +65,6 @@ final class Rfc6455Connection implements WebsocketConnection
         return $this->client->isClosedByPeer();
     }
 
-    public function getUnansweredPingCount(): int
-    {
-        return $this->client->getUnansweredPingCount();
-    }
-
     public function getCloseCode(): int
     {
         return $this->client->getCloseCode();
@@ -78,9 +75,9 @@ final class Rfc6455Connection implements WebsocketConnection
         return $this->client->getCloseReason();
     }
 
-    public function send(string $data): void
+    public function sendText(string $data): void
     {
-        $this->client->send($data);
+        $this->client->sendText($data);
     }
 
     public function sendBinary(string $data): void
@@ -88,9 +85,9 @@ final class Rfc6455Connection implements WebsocketConnection
         $this->client->sendBinary($data);
     }
 
-    public function stream(ReadableStream $stream): void
+    public function streamText(ReadableStream $stream): void
     {
-        $this->client->stream($stream);
+        $this->client->streamText($stream);
     }
 
     public function streamBinary(ReadableStream $stream): void
@@ -103,9 +100,14 @@ final class Rfc6455Connection implements WebsocketConnection
         $this->client->ping();
     }
 
-    public function getInfo(): WebsocketClientMetadata
+    public function getCount(WebsocketCount $type): int
     {
-        return $this->client->getInfo();
+        return $this->client->getCount($type);
+    }
+
+    public function getTimestamp(WebsocketTimestamp $type): int
+    {
+        return $this->client->getTimestamp($type);
     }
 
     public function isClosed(): bool
@@ -113,7 +115,7 @@ final class Rfc6455Connection implements WebsocketConnection
         return $this->client->isClosed();
     }
 
-    public function close(int $code = CloseCode::NORMAL_CLOSE, string $reason = ''): void
+    public function close(int $code = WebsocketCloseCode::NORMAL_CLOSE, string $reason = ''): void
     {
         $this->client->close($code, $reason);
     }
@@ -121,5 +123,15 @@ final class Rfc6455Connection implements WebsocketConnection
     public function onClose(\Closure $onClose): void
     {
         $this->client->onClose($onClose);
+    }
+
+    public function isCompressionEnabled(): bool
+    {
+        return $this->client->isCompressionEnabled();
+    }
+
+    public function getIterator(): Traversable
+    {
+        yield from $this->client;
     }
 }

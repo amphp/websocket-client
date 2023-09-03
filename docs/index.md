@@ -71,7 +71,7 @@ use Amp\Websocket\Client;
 Amp\Loop::run(function () {
     /** @var Client\WebsocketConnection $connection */
     $connection = yield Client\connect('ws://demos.kaazing.com/echo');
-    yield $connection->send('Hello!');
+    yield $connection->sendText('Hello!');
 
     $i = 0;
 
@@ -89,9 +89,9 @@ Amp\Loop::run(function () {
         yield new Delayed(1000);
 
         if ($i < 3) {
-            yield $connection->send('Ping: ' . ++$i);
+            yield $connection->sendText('Ping: ' . ++$i);
         } else {
-            yield $connection->send('Goodbye!');
+            yield $connection->sendText('Goodbye!');
         }
     }
 });
