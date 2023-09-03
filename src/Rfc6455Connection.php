@@ -11,6 +11,7 @@ use Amp\Socket\SocketAddress;
 use Amp\Socket\TlsInfo;
 use Amp\Websocket\Rfc6455Client;
 use Amp\Websocket\WebsocketCloseCode;
+use Amp\Websocket\WebsocketCloseInfo;
 use Amp\Websocket\WebsocketCount;
 use Amp\Websocket\WebsocketMessage;
 use Amp\Websocket\WebsocketTimestamp;
@@ -63,19 +64,9 @@ final class Rfc6455Connection implements WebsocketConnection, \IteratorAggregate
         return $this->client->getTlsInfo();
     }
 
-    public function isClosedByPeer(): ?bool
+    public function getCloseInfo(): WebsocketCloseInfo
     {
-        return $this->client->isClosedByPeer();
-    }
-
-    public function getCloseCode(): ?int
-    {
-        return $this->client->getCloseCode();
-    }
-
-    public function getCloseReason(): ?string
-    {
-        return $this->client->getCloseReason();
+        return $this->client->getCloseInfo();
     }
 
     public function sendText(string $data): void
@@ -108,7 +99,7 @@ final class Rfc6455Connection implements WebsocketConnection, \IteratorAggregate
         return $this->client->getCount($type);
     }
 
-    public function getTimestamp(WebsocketTimestamp $type): int
+    public function getTimestamp(WebsocketTimestamp $type): float
     {
         return $this->client->getTimestamp($type);
     }
