@@ -16,6 +16,9 @@ use Amp\Websocket\WebsocketMessage;
 use Amp\Websocket\WebsocketTimestamp;
 use Traversable;
 
+/**
+ * @implements  \IteratorAggregate<int, WebsocketMessage>
+ */
 final class Rfc6455Connection implements WebsocketConnection, \IteratorAggregate
 {
     use ForbidCloning;
@@ -60,17 +63,17 @@ final class Rfc6455Connection implements WebsocketConnection, \IteratorAggregate
         return $this->client->getTlsInfo();
     }
 
-    public function isClosedByPeer(): bool
+    public function isClosedByPeer(): ?bool
     {
         return $this->client->isClosedByPeer();
     }
 
-    public function getCloseCode(): int
+    public function getCloseCode(): ?int
     {
         return $this->client->getCloseCode();
     }
 
-    public function getCloseReason(): string
+    public function getCloseReason(): ?string
     {
         return $this->client->getCloseReason();
     }
