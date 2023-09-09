@@ -236,6 +236,7 @@ final class WebsocketHandshake extends HttpRequest
     {
         if (\is_string($uri)) {
             try {
+                /** @psalm-suppress DeprecatedMethod Using deprecated method to support 6.x and 7.x of league/uri */
                 $uri = Uri\Http::createFromString($uri);
             } catch (\Exception $exception) {
                 throw new \ValueError('Invalid Websocket URI provided', 0, $exception);
