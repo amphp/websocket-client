@@ -14,7 +14,7 @@ use Amp\Socket\SocketException;
 use Amp\TimeoutCancellation;
 use Amp\Websocket\Client;
 use Amp\Websocket\Parser\Rfc6455ParserFactory;
-use Amp\Websocket\Server\EmptyWebsocketHandshakeHandler;
+use Amp\Websocket\Server\Rfc6455Acceptor;
 use Amp\Websocket\Server\Websocket;
 use Amp\Websocket\Server\WebsocketClientHandler;
 use Amp\Websocket\WebsocketClient;
@@ -38,7 +38,7 @@ class WebsocketConnectionTest extends AsyncTestCase
         $httpServer = SocketHttpServer::createForDirectAccess($logger);
         $httpServer->expose(new InternetAddress('127.0.0.1', 0));
         $httpServer->start(
-            new Websocket($logger, new EmptyWebsocketHandshakeHandler(), $clientHandler),
+            new Websocket($httpServer, $logger, new Rfc6455Acceptor(), $clientHandler),
             new DefaultErrorHandler(),
         );
 
