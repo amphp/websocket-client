@@ -33,7 +33,7 @@
         "amphp/amp": "^3",
         "amphp/byte-stream": "^2",
         "amphp/http": "^2",
-        "amphp/http-client": "^5-dev",
+        "amphp/http-client": "^5",
         "amphp/socket": "^2",
         "amphp/websocket": "^2",
         "league/uri": "^6.8 | ^7.1",
@@ -42,7 +42,7 @@
     },
     "require-dev": {
         "amphp/http-server": "^3",
-        "amphp/websocket-server": "^3-dev",
+        "amphp/websocket-server": "^3",
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "^2",
         "phpunit/phpunit": "^9",
