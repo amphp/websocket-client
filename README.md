@@ -73,7 +73,7 @@ $connectionFactory = new Rfc6455ConnectionFactory(
 
 $connector = new Rfc6455Connector($connectionFactory);
 
-$handshake = new WebsocketHandshake('wss://example.com/websocket')
+$handshake = new WebsocketHandshake('wss://example.com/websocket');
 $connection = $connector->connect($handshake);
 ```
 
