@@ -31,7 +31,7 @@ final class Rfc6455Connector implements WebsocketConnector
      */
     public function __construct(
         private readonly WebsocketConnectionFactory $connectionFactory = new Rfc6455ConnectionFactory(),
-        HttpClient $httpClient = null,
+        ?HttpClient $httpClient = null,
         private readonly ?WebsocketCompressionContextFactory $compressionContextFactory = new Rfc7692CompressionFactory(),
     ) {
         $this->httpClient = $httpClient
