@@ -111,13 +111,13 @@ final class Rfc6455Connector implements WebsocketConnector
         $request->setTlsHandshakeTimeout($handshake->getTlsHandshakeTimeout());
         $request->setHeaderSizeLimit($handshake->getHeaderSizeLimit());
 
-        $extensions = Http\splitHeader($request, 'sec-websocket-extensions');
+        $extensions = Http\splitHeader($request, 'sec-websocket-extensions') ?? [];
 
         if ($this->compressionContextFactory && \extension_loaded('zlib')) {
             $extensions[] = $this->compressionContextFactory->createRequestHeader();
         }
 
-        if (!empty($extensions)) {
+        if ($extensions) {
             $request->setHeader('sec-websocket-extensions', \implode(', ', $extensions));
         }
 
